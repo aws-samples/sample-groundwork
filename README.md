@@ -33,7 +33,7 @@ is unauthenticated by default; see `docs/SETUP.md` to lock it down).
 ## Progressive fidelity — one UI, three modes
 
 The same UI runs at three fidelities, selected by the `CONTEXT_MODE` env var. You
-climb the ladder; nothing is thrown away. An on-screen badge always shows which
+climb the ladder nothing is thrown away. An on-screen badge always shows which
 level is live.
 
 | Mode | `CONTEXT_MODE` | What it is | AWS? |
