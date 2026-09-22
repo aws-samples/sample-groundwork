@@ -2,10 +2,10 @@
 
     # Use a globally-unique bucket you own, e.g. groundwork-feeds-<account-id>-<region>.
     # S3 names are global; a short generic name can be squatted by another account.
-    cf-connect kev      --bucket <your-unique-feeds-bucket> --ics-only
-    cf-connect nvd      --bucket <your-unique-feeds-bucket> --keyword siemens --limit 500
-    cf-connect mitre-ics --bucket <your-unique-feeds-bucket>
-    cf-connect all      --bucket <your-unique-feeds-bucket> --ics-only --dry-run
+    gw-connect kev      --bucket <your-unique-feeds-bucket> --ics-only
+    gw-connect nvd      --bucket <your-unique-feeds-bucket> --keyword siemens --limit 500
+    gw-connect mitre-ics --bucket <your-unique-feeds-bucket>
+    gw-connect all      --bucket <your-unique-feeds-bucket> --ics-only --dry-run
 
 Output lands under s3://<bucket>/<prefix>/<feed>/, which is what you register as
 a COA DOCUMENTS source. Register the parent prefix once and every feed shows up

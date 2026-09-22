@@ -2,7 +2,7 @@
 
 These eight Markdown documents are the **synthetic drill-bit root-cause story**
 rendered as source documents for **Mode 3 (Live COA)** ingestion. They follow the
-same format the `cf_connectors` produce (Markdown + YAML frontmatter, prose
+same format the `gw_connectors` produce (Markdown + YAML frontmatter, prose
 written in the manufacturing ontology's vocabulary) so COA's document-extraction
 pipeline maps them onto the ontology's classes and relations.
 

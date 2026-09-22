@@ -6,9 +6,9 @@ import httpx
 import pytest
 import respx
 
-from cf_connectors import cisa_kev, mitre_ics, nvd
-from cf_connectors.base import ConnectorError, Document, S3DocumentWriter, fetch_json
-from cf_connectors.handler import handler
+from gw_connectors import cisa_kev, mitre_ics, nvd
+from gw_connectors.base import ConnectorError, Document, S3DocumentWriter, fetch_json
+from gw_connectors.handler import handler
 
 # ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -245,7 +245,7 @@ def test_dry_run_writer_needs_no_client():
 
 @respx.mock
 def test_fetch_json_retries_on_429_then_succeeds(monkeypatch):
-    monkeypatch.setattr("cf_connectors.base.time.sleep", lambda _: None)
+    monkeypatch.setattr("gw_connectors.base.time.sleep", lambda _: None)
     route = respx.get("https://api.example.com/data")
     route.side_effect = [
         httpx.Response(429, headers={"Retry-After": "1"}),
@@ -258,7 +258,7 @@ def test_fetch_json_retries_on_429_then_succeeds(monkeypatch):
 
 @respx.mock
 def test_fetch_json_retries_on_500(monkeypatch):
-    monkeypatch.setattr("cf_connectors.base.time.sleep", lambda _: None)
+    monkeypatch.setattr("gw_connectors.base.time.sleep", lambda _: None)
     route = respx.get("https://api.example.com/data")
     route.side_effect = [httpx.Response(503), httpx.Response(200, json=[])]
 
@@ -267,7 +267,7 @@ def test_fetch_json_retries_on_500(monkeypatch):
 
 @respx.mock
 def test_fetch_json_gives_up_after_max_retries(monkeypatch):
-    monkeypatch.setattr("cf_connectors.base.time.sleep", lambda _: None)
+    monkeypatch.setattr("gw_connectors.base.time.sleep", lambda _: None)
     respx.get("https://api.example.com/data").mock(return_value=httpx.Response(429))
 
     with pytest.raises(ConnectorError, match="failed after"):
@@ -276,7 +276,7 @@ def test_fetch_json_gives_up_after_max_retries(monkeypatch):
 
 @respx.mock
 def test_fetch_json_does_not_retry_a_404(monkeypatch):
-    monkeypatch.setattr("cf_connectors.base.time.sleep", lambda _: None)
+    monkeypatch.setattr("gw_connectors.base.time.sleep", lambda _: None)
     route = respx.get("https://api.example.com/data").mock(
         return_value=httpx.Response(404, text="gone")
     )
@@ -365,7 +365,7 @@ def test_nvd_flattens_cpe_to_readable_products():
 
 @respx.mock
 def test_nvd_documents_and_api_key_header(monkeypatch):
-    monkeypatch.setattr("cf_connectors.nvd.time.sleep", lambda _: None)
+    monkeypatch.setattr("gw_connectors.nvd.time.sleep", lambda _: None)
     route = respx.get(url__startswith=nvd.NVD_CVE_API).mock(
         return_value=httpx.Response(200, json=NVD_PAYLOAD)
     )
@@ -384,7 +384,7 @@ def test_nvd_documents_and_api_key_header(monkeypatch):
 
 @respx.mock
 def test_nvd_omits_api_key_header_when_absent(monkeypatch):
-    monkeypatch.setattr("cf_connectors.nvd.time.sleep", lambda _: None)
+    monkeypatch.setattr("gw_connectors.nvd.time.sleep", lambda _: None)
     route = respx.get(url__startswith=nvd.NVD_CVE_API).mock(
         return_value=httpx.Response(200, json=NVD_PAYLOAD)
     )
@@ -396,7 +396,7 @@ def test_nvd_omits_api_key_header_when_absent(monkeypatch):
 
 @respx.mock
 def test_nvd_stops_on_empty_page(monkeypatch):
-    monkeypatch.setattr("cf_connectors.nvd.time.sleep", lambda _: None)
+    monkeypatch.setattr("gw_connectors.nvd.time.sleep", lambda _: None)
     respx.get(url__startswith=nvd.NVD_CVE_API).mock(
         return_value=httpx.Response(200, json={"totalResults": 0, "vulnerabilities": []})
     )
@@ -479,7 +479,7 @@ def test_handler_runs_a_single_feed(monkeypatch):
 
     fake = FakeS3()
     monkeypatch.setattr(
-        "cf_connectors.handler.S3DocumentWriter",
+        "gw_connectors.handler.S3DocumentWriter",
         lambda bucket, prefix, **kw: S3DocumentWriter(bucket, prefix, s3_client=fake),
     )
 
@@ -506,8 +506,8 @@ def test_handler_rejects_unknown_feed(monkeypatch):
 def test_handler_all_reports_partial_failure_instead_of_raising(monkeypatch):
     """One dead upstream must not discard the feeds that worked."""
     monkeypatch.setenv("FEED_BUCKET", "bkt")
-    monkeypatch.setattr("cf_connectors.base.time.sleep", lambda _: None)
-    monkeypatch.setattr("cf_connectors.nvd.time.sleep", lambda _: None)
+    monkeypatch.setattr("gw_connectors.base.time.sleep", lambda _: None)
+    monkeypatch.setattr("gw_connectors.nvd.time.sleep", lambda _: None)
 
     respx.get(cisa_kev.KEV_FEED_URL).mock(return_value=httpx.Response(200, json=KEV_PAYLOAD))
     respx.get(mitre_ics.ICS_ATTACK_URL).mock(return_value=httpx.Response(500))
@@ -517,7 +517,7 @@ def test_handler_all_reports_partial_failure_instead_of_raising(monkeypatch):
 
     fake = FakeS3()
     monkeypatch.setattr(
-        "cf_connectors.handler.S3DocumentWriter",
+        "gw_connectors.handler.S3DocumentWriter",
         lambda bucket, prefix, **kw: S3DocumentWriter(bucket, prefix, s3_client=fake),
     )
 
@@ -529,7 +529,7 @@ def test_handler_all_reports_partial_failure_instead_of_raising(monkeypatch):
 
 
 def test_handler_clamps_nvd_window_to_120_days():
-    from cf_connectors.handler import _nvd_window
+    from gw_connectors.handler import _nvd_window
 
     start, end = _nvd_window(400)
     assert start is not None and end is not None

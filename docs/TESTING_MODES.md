@@ -219,7 +219,7 @@ Mode 3's graph starts empty and fills from the sources you register:
 - **Documents** — public threat feeds landed to S3 by the connectors, then
   registered as a COA `DOCUMENTS` source:
   ```bash
-  cd connectors && uv run cf-connect all --bucket <YOUR_COA_SOURCES_BUCKET> --ics-only
+  cd connectors && uv run gw-connect all --bucket <YOUR_COA_SOURCES_BUCKET> --ics-only
   ```
   366 threat-intel docs (CISA KEV + MITRE ATT&CK ICS + NVD) are already landed and
   registered. COA extracts them **asynchronously** (chunking → embeddings → graph
@@ -251,7 +251,7 @@ test surface shows it concretely:
   fidelities.
 - The **same `metrics.osi.yaml`** defines Mode 2's governed-metric list and Mode
   3's COA Metric Service metrics.
-- the ontology-layer **`connectors/` (cf-connect)** land the Mode 3 documents; the app's
+- the ontology-layer **`connectors/` (gw-connect)** land the Mode 3 documents; the app's
   **TypeScript connectors** (`/api/sync`) land Mode 1/2 data. Same feeds, right
   runtime per mode.
 - The **`CoaProvider`** speaks COA's Serve/Data-Layer REST — the one seam that

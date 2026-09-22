@@ -111,7 +111,7 @@ connectors normalize NVD / CISA KEV / MITRE ATT&CK ICS to Markdown in S3.
 ```bash
 cd connectors
 # use the unique bucket you created and own:
-uv run cf-connect all --bucket <your-unique-feeds-bucket> --ics-only
+uv run gw-connect all --bucket <your-unique-feeds-bucket> --ics-only
 # --dry-run fetches and renders without writing (no AWS creds needed)
 ```
 

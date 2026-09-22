@@ -7,8 +7,8 @@ import pytest
 import respx
 from click.testing import CliRunner
 
-from cf_connectors import cisa_kev, mitre_ics, nvd
-from cf_connectors.cli import main
+from gw_connectors import cisa_kev, mitre_ics, nvd
+from gw_connectors.cli import main
 from tests.test_connectors import ATTACK_BUNDLE, KEV_PAYLOAD, NVD_PAYLOAD
 
 
@@ -19,8 +19,8 @@ def runner():
 
 @pytest.fixture(autouse=True)
 def no_sleep(monkeypatch):
-    monkeypatch.setattr("cf_connectors.base.time.sleep", lambda _: None)
-    monkeypatch.setattr("cf_connectors.nvd.time.sleep", lambda _: None)
+    monkeypatch.setattr("gw_connectors.base.time.sleep", lambda _: None)
+    monkeypatch.setattr("gw_connectors.nvd.time.sleep", lambda _: None)
 
 
 @respx.mock
