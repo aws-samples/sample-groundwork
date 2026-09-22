@@ -44,6 +44,23 @@ function readExpiry(idToken: string): number {
 }
 
 /**
+ * The `sub` claim from a COA ID token — the AgentCore transport derives the
+ * runtime session id from it (sticky routing). Decoded without verification;
+ * we only read a routing hint, not an authorization decision. Returns "" when
+ * the token is malformed or carries no `sub`.
+ */
+export function readSub(idToken: string): string {
+  try {
+    const payload = idToken.split(".")[1];
+    const json = Buffer.from(payload, "base64").toString("utf8");
+    const { sub } = JSON.parse(json) as { sub?: string };
+    return typeof sub === "string" ? sub : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
  * Whether server-side minting is configured. When false, the CoaProvider falls
  * back to whatever COA_TOKEN is in the environment (local script flow).
  */

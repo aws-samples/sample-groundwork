@@ -1,4 +1,4 @@
-# ContextForge
+# GroundWork
 
 An open-source **context-engineering** layer for security and operations. Point
 it at messy sources — threat reports, advisories, CVEs, SBOMs, reviews, returns,
@@ -10,7 +10,7 @@ between a complaint and a root cause.
 Clone it, run it in your own AWS account, pick your model, ask across all your
 sources.
 
-> **Sample code — not production-ready.** ContextForge is a demonstration
+> **Sample code — not production-ready.** GroundWork is a demonstration
 > sample. It ships with demo-grade defaults (e.g. the local login is
 > unauthenticated by default, sample data is synthetic) and is intended for
 > learning and evaluation, not production use. Review and harden authentication,
@@ -60,7 +60,7 @@ CONTEXT_MODE=ontology npm run dev
 ## Configuration & Mode 3 (Live COA)
 
 Mode 3 runs against a **[Context Ontology Accelerator](https://github.com/aws/context-ontology-accelerator)**
-you deploy into **your own** AWS account. ContextForge is model- and
+you deploy into **your own** AWS account. GroundWork is model- and
 account-agnostic: you supply your COA endpoint, your Cognito credentials, and
 your namespace IDs — nothing is hardcoded.
 
@@ -93,6 +93,7 @@ with three implementations — one per mode. The UI never knows which is active.
 | [`docs/MODE3_COA.md`](docs/MODE3_COA.md) | Deploying & connecting a Context Ontology Accelerator |
 | [`docs/RUNNING.md`](docs/RUNNING.md) | Detailed run/config reference |
 | [`docs/TESTING_MODES.md`](docs/TESTING_MODES.md) | Exercising the three modes |
+| [`docs/JDBC_OT_SECURITY_SCENARIO.md`](docs/JDBC_OT_SECURITY_SCENARIO.md) | Adding a live database (JDBC/RDS) as a source — provision, seed, register |
 | [`docs/DEPLOY_PUBLIC.md`](docs/DEPLOY_PUBLIC.md) | Hosting the app (e.g. AWS App Runner) |
 
 The container (`Dockerfile`) uses the official Node.js base image from Docker Hub

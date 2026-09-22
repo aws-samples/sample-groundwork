@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# ContextForge — launch the dev server ready for a Mode 3 (Live COA) demo.
+# GroundWork — launch the dev server ready for a Mode 3 (Live COA) demo.
 #
 # COA uses short-lived Cognito OIDC tokens (~1h). This script mints a FRESH one,
 # writes it to .env.local, and launches `next dev` with any stale COA_TOKEN

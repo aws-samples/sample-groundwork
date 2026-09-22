@@ -1,6 +1,6 @@
-# Testing & Experiencing ContextForge — the three modes
+# Testing & Experiencing GroundWork — the three modes
 
-> **What this is.** A hands-on walkthrough to *experience* ContextForge at all
+> **What this is.** A hands-on walkthrough to *experience* GroundWork at all
 > three fidelities, plus a runnable acceptance test (`scripts/test-modes.sh`)
 > where **every assertion is tied to a specific claim** from the original
 > LinkedIn post (the vision) and the `docs/RUNNING.md` post-claim→mode table.
@@ -13,7 +13,7 @@
 
 ## 0. The one idea being tested
 
-ContextForge is the *same UI and the same question* at three levels of fidelity,
+GroundWork is the *same UI and the same question* at three levels of fidelity,
 one environment variable apart. The question that carries the whole thing:
 
 > **"What's the blast radius if VOLTZITE compromises our VPN?"**
@@ -50,7 +50,7 @@ npm run db:seed        # loads the curated VOLTZITE story into SQLite (Modes 1 &
 `energy` and `cyber` graphs.
 
 > If you ran the public connectors earlier and the graph looks bloated (hundreds
-> of CVE nodes), just re-seed: `rm contextforge.db* && npm run db:seed`. That
+> of CVE nodes), just re-seed: `rm groundwork.db* && npm run db:seed`. That
 > restores the tight, walkable demo story.
 
 ---
@@ -121,7 +121,7 @@ first (Cognito tokens last ~1h):
 # refresh COA_TOKEN in .env.local
 aws cognito-idp initiate-auth --auth-flow USER_PASSWORD_AUTH \
   --client-id <YOUR_COGNITO_CLIENT_ID> \
-  --auth-parameters USERNAME=<you>@example.com,PASSWORD='<pw>' \
+  --auth-parameters USERNAME=<you>@amazon.com,PASSWORD='<pw>' \
   --query AuthenticationResult.IdToken --output text
 # paste into COA_TOKEN= in .env.local, then:
 CONTEXT_MODE=coa npm run dev

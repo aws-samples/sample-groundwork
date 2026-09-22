@@ -1,4 +1,4 @@
-# OSI v1.0 — ContextForge OT Security governed metrics
+# OSI v1.0 — GroundWork OT Security governed metrics
 #
 # Imported via POST /namespaces/{ns}/import-osi. Expressions assume the table
 # shapes described in sources.yaml; adjust source_table per deployment.
@@ -139,11 +139,21 @@ metrics:
       Average days elapsed since a patch became available for a vulnerability
       that is still unpatched on at least one affected asset.
     expression:
+      # Date arithmetic is the least portable part of SQL. On PostgreSQL and
+      # Redshift (the direct-JDBC engines) `date - date` already yields an
+      # INTEGER number of days, so subtract directly — do NOT wrap it in
+      # EXTRACT(DAY FROM …), which expects an interval and errors on an integer
+      # ("function extract(unknown, integer) does not exist"). Snowflake and
+      # Databricks disallow bare date subtraction and need DATEDIFF.
       dialects:
         - dialect: ANSI_SQL
           expression: >-
-            AVG(EXTRACT(DAY FROM (CURRENT_DATE - patch_available_date)))
+            AVG(CURRENT_DATE - patch_available_date)
             FILTER (WHERE patch_applied = FALSE AND patch_available_date IS NOT NULL)
+        - dialect: SNOWFLAKE
+          expression: >-
+            AVG(CASE WHEN patch_applied = FALSE AND patch_available_date IS NOT NULL
+            THEN DATEDIFF('day', patch_available_date, CURRENT_DATE) END)
         - dialect: DATABRICKS
           expression: >-
             AVG(CASE WHEN patch_applied = FALSE AND patch_available_date IS NOT NULL

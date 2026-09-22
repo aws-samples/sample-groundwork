@@ -1,4 +1,4 @@
-# ContextForge — container for the Next.js SSR app (App Runner).
+# GroundWork — container for the Next.js SSR app (App Runner).
 # Multi-stage: install+compile native deps, build the standalone server, then a
 # slim runtime. Serves all three modes; Mode 3 (COA) auto-mints its token
 # server-side (see src/lib/context/coa-token.ts), so no token is baked in.
@@ -23,7 +23,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # The SQLite DB is seeded by the CI step (see buildspec.yml) and arrives in the
-# build context as contextforge.db — running tsx here segfaults on amd64, so we
+# build context as groundwork.db — running tsx here segfaults on amd64, so we
 # bake in the pre-seeded file instead. (Local `finch build` also works: run
 # `npm run db:seed` first so the file exists.)
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -55,7 +55,7 @@ COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
 # Seeded DB (Modes 1/2).
-COPY --from=build /app/contextforge.db ./contextforge.db
+COPY --from=build /app/groundwork.db ./groundwork.db
 # Install better-sqlite3 fresh. Prefer the PREBUILT binary (build_from_source
 # =false) — a source compile in the build stage produced a native addon that
 # segfaulted at request time on this amd64 runtime. The prebuilt binary matches
@@ -74,8 +74,8 @@ EXPOSE 8080
 #    what makes Modes 1/2 work in the container (empty/read-only DB → crash).
 #  - Force HOSTNAME=0.0.0.0 so App Runner's health check can reach the server
 #    (Next standalone otherwise binds to the container hostname).
-ENV DB_PATH=/tmp/contextforge.db
+ENV DB_PATH=/tmp/groundwork.db
 # Liveness probe — the app serves GET /api/health (returns {"status":"ok"}).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD node -e "require('http').get({host:'127.0.0.1',port:process.env.PORT||8080,path:'/api/health'},r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
-CMD ["sh", "-c", "cp -f ./contextforge.db /tmp/contextforge.db 2>/dev/null || true; HOSTNAME=0.0.0.0 exec node server.js"]
+CMD ["sh", "-c", "cp -f ./groundwork.db /tmp/groundwork.db 2>/dev/null || true; HOSTNAME=0.0.0.0 exec node server.js"]

@@ -8,7 +8,7 @@ description: >-
 default_namespace: energy
 
 ontology: ontology.ttl
-ontology_title: ContextForge Energy Outage Ontology
+ontology_title: GroundWork Energy Outage Ontology
 ontology_type: user_created
 
 metrics: metrics.osi.yaml

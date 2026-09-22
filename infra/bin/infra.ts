@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import * as cdk from "aws-cdk-lib";
-import { ContextforgeStack } from "../lib/infra-stack";
+import { GroundworkStack } from "../lib/infra-stack";
 
 const app = new cdk.App();
-new ContextforgeStack(app, "ContextforgeStack", {
+new GroundworkStack(app, "GroundworkStack", {
   env: { region: "us-west-2" },
 });

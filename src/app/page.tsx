@@ -11,7 +11,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
       <div className="text-center">
-        <h1 className="text-2xl font-bold text-white"><span className="text-indigo-400">Context</span>Forge</h1>
+        <h1 className="text-2xl font-bold text-white"><span className="text-indigo-400">Ground</span>Work</h1>
         <p className="text-zinc-400 mt-2">Loading...</p>
       </div>
     </div>

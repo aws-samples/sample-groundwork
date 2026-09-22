@@ -44,7 +44,7 @@ export function ConsoleLayout({ children }: { children: React.ReactNode }) {
           </button>
           <svg className="w-6 h-6" viewBox="0 0 40 40" fill="none"><path d="M20 4L36 12v16L20 36 4 28V12L20 4z" fill="url(#aws-g)" /><path d="M14 20c0-3.3 2.7-6 6-6s6 2.7 6 6-2.7 6-6 6-6-2.7-6-6z" fill="#fff" fillOpacity="0.9"/><path d="M18 18l2 4 2-4" stroke="#232f3e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><defs><linearGradient id="aws-g" x1="4" y1="4" x2="36" y2="36"><stop stopColor="#6366f1"/><stop offset="1" stopColor="#a855f7"/></linearGradient></defs></svg>
           <div className="text-base font-bold tracking-tight">
-            <span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Context</span><span className="text-white">Forge</span>
+            <span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Ground</span><span className="text-white">Work</span>
           </div>
           <FidelityBadge />
 

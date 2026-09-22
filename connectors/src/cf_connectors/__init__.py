@@ -1,4 +1,4 @@
-"""ContextForge feed connectors.
+"""GroundWork feed connectors.
 
 COA supports exactly three source shapes — GLUE_DATABASE, JDBC_DATABASE, and
 DOCUMENTS — with no plugin model, so a REST feed cannot be a COA source directly.

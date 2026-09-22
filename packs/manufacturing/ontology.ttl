@@ -1,4 +1,4 @@
-@prefix mfg:  <https://contextforge.io/ontology/manufacturing#> .
+@prefix mfg:  <https://groundwork.io/ontology/manufacturing#> .
 @prefix owl:  <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
@@ -7,9 +7,9 @@
 
 # ── Ontology declaration ──────────────────────────────────────────────────────
 
-<https://contextforge.io/ontology/manufacturing>
+<https://groundwork.io/ontology/manufacturing>
     a owl:Ontology ;
-    dcterms:title "ContextForge Manufacturing Supply Chain Ontology" ;
+    dcterms:title "GroundWork Manufacturing Supply Chain Ontology" ;
     dcterms:description """Discrete-manufacturing quality and supply chain domain
         model: suppliers, incoming lots, production batches, finished products,
         machines, specifications, and defects. Genealogy is modelled with a

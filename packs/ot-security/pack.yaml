@@ -9,7 +9,7 @@ description: >-
 default_namespace: otsec
 
 ontology: ontology.ttl
-ontology_title: ContextForge OT Security Ontology
+ontology_title: GroundWork OT Security Ontology
 # foundational | induced | user_created
 # user_created is correct here: this ontology is hand-authored, not induced from
 # a data scan, and it is not one of COA's shipped foundational ontologies.

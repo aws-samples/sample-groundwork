@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# ContextForge — mode acceptance test
+# GroundWork — mode acceptance test
 #
 # Runs a series of assertions against a RUNNING dev server and reports, per
 # assertion, PASS/FAIL and the LinkedIn-post / vision claim it validates.
@@ -62,7 +62,7 @@ if [ -z "$MODE_JSON" ]; then
 fi
 FIDELITY="$(printf '%s' "$MODE_JSON" | jget "['fidelity']")"
 echo ""
-echo "${c_bold}ContextForge acceptance test${c_off}"
+echo "${c_bold}GroundWork acceptance test${c_off}"
 echo "  server:   $URL"
 echo "  vertical: $VERTICAL"
 echo "  fidelity: ${c_bold}$FIDELITY${c_off}   ${c_dim}(from /api/mode — the on-screen honesty badge)${c_off}"

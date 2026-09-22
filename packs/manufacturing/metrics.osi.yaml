@@ -1,4 +1,4 @@
-# OSI v1.0 — ContextForge Manufacturing Supply Chain governed metrics
+# OSI v1.0 — GroundWork Manufacturing Supply Chain governed metrics
 #
 # Defect rate is expressed in PPM (parts per million) because that is the unit
 # quality engineers actually use; reporting it as a fraction invites off-by-1000
@@ -175,7 +175,7 @@ metrics:
         A composite, so always break out which component dominates when a score
         is high — an expired certificate and a genuine quality problem warrant
         different responses. Do not present this as an industry-standard index;
-        it is a ContextForge-defined heuristic.
+        it is a GroundWork-defined heuristic.
       examples:
         - "Which suppliers are highest risk?"
         - "Why is Acme Metals flagged?"

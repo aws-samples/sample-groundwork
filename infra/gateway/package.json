@@ -1,5 +1,5 @@
 {
-  "name": "contextforge-gateway-infra",
+  "name": "groundwork-gateway-infra",
   "version": "0.1.0",
   "private": true,
   "description": "AgentCore Gateway fronting the Context Ontology Accelerator MCP server",

@@ -46,6 +46,12 @@ const HERO = {
       "Which ICS threat groups can reach our PLCs and what techniques would they use?",
       "What is CVE-2024-36401 in GeoServer, how severe is it, and how could it be exploited?",
       "How can an attacker achieve persistence on a Siemens PLC?",
+      // Live-database (COA JDBC_DATABASE) questions — answered from the federated
+      // Postgres OT-inventory tables via governed metrics + graph reasoning.
+      // See docs/JDBC_OT_SECURITY_SCENARIO.md.
+      "How many OT assets are affected by actively exploited (CISA KEV) vulnerabilities?",
+      "How many NERC CIP and IEC 62443 compliance controls are failing across our OT assets?",
+      "If an attacker compromises our VPN gateway, how many OT assets are reachable and does the path reach any safety-critical systems?",
     ],
   },
 };

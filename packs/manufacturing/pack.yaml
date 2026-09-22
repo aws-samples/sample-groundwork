@@ -9,7 +9,7 @@ description: >-
 default_namespace: manufacturing
 
 ontology: ontology.ttl
-ontology_title: ContextForge Manufacturing Supply Chain Ontology
+ontology_title: GroundWork Manufacturing Supply Chain Ontology
 ontology_type: user_created
 
 metrics: metrics.osi.yaml

@@ -22,11 +22,11 @@ phases:
       # Seed the DB, then fold WAL data into the single .db file so it copies cleanly.
       - npm ci
       - npx tsx scripts/seed.ts
-      - node -e "const D=require('better-sqlite3');const db=new D('contextforge.db');db.pragma('wal_checkpoint(TRUNCATE)');db.close();"
-      - node -e "const D=require('better-sqlite3');const n=new D('contextforge.db').prepare('select count(*) c from nodes').get().c;if(!n)throw new Error('seed produced 0 nodes');console.log('seeded nodes:',n)"
+      - node -e "const D=require('better-sqlite3');const db=new D('groundwork.db');db.pragma('wal_checkpoint(TRUNCATE)');db.close();"
+      - node -e "const D=require('better-sqlite3');const n=new D('groundwork.db').prepare('select count(*) c from nodes').get().c;if(!n)throw new Error('seed produced 0 nodes');console.log('seeded nodes:',n)"
   build:
     commands:
-      - docker build -t $ECR/contextforge:latest .
+      - docker build -t $ECR/groundwork:latest .
   post_build:
     commands:
-      - docker push $ECR/contextforge:latest
+      - docker push $ECR/groundwork:latest

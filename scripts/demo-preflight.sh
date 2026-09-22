@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# ContextForge — demo readiness preflight
+# GroundWork — demo readiness preflight
 #
 # Run this a few minutes BEFORE any demo. It answers one question fast:
 # "Can I demo all three modes right now?" — checking the things that actually
@@ -35,7 +35,7 @@ COA_PASS="${COA_PASS:-}"
 COA_BASE="${COA_BASE_URL:-}"
 # COA data-plane resolves namespaces by UUID, not name (name → 0 results).
 NS="${COA_NAMESPACE_OTSEC:-${COA_NAMESPACE:-}}"
-DB="contextforge.db"
+DB="groundwork.db"
 
 if [ -z "$COA_BASE" ] || [ -z "$CLIENT_ID" ] || [ -z "$NS" ]; then
   echo "NOTE: COA_BASE_URL / COA_CLIENT_ID / COA_NAMESPACE_OTSEC not set in .env.local —" >&2
@@ -49,7 +49,7 @@ bad()  { printf "  ${r}✗${x} %s\n" "$1"; fails=$((fails+1)); }
 warn() { printf "  ${y}!${x} %s\n" "$1"; warns=$((warns+1)); }
 
 echo ""
-echo "${b}ContextForge — demo readiness${x}   ${d}$(date '+%H:%M:%S')${x}"
+echo "${b}GroundWork — demo readiness${x}   ${d}$(date '+%H:%M:%S')${x}"
 
 # ── Modes 1 & 2: local SQLite must be seeded ─────────────────────────────────
 echo "${b}Modes 1 & 2 (local, no AWS)${x}"
@@ -68,7 +68,7 @@ TOKEN="$(AWS_PROFILE="$PROFILE" AWS_DEFAULT_REGION="$REGION" aws cognito-idp ini
   --auth-parameters "USERNAME=${COA_USER},PASSWORD=${COA_PASS}" \
   --query 'AuthenticationResult.IdToken' --output text 2>/dev/null || echo "")"
 if [ -z "$TOKEN" ] || [ "$TOKEN" = "None" ]; then
-  bad "Could not mint a COA token (check your AWS credentials / session). Rest of Mode 3 skipped."
+  bad "Could not mint a COA token (check AWS creds / mwinit / Isengard). Rest of Mode 3 skipped."
 else
   ok "COA token minted (fresh, ~1h)"
   H=(-H "Authorization: Bearer $TOKEN")

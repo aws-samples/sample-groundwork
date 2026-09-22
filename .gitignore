@@ -46,10 +46,10 @@ next-env.d.ts
 *.db-wal
 *.db-shm
 
-# stray local artifacts (screenshots, exported PDFs) — not source
+# Stray local artifacts (screenshots, exported PDFs, etc.) — not source
 *.pdf
 
-# python (connectors/, tools/ — run via uv)
+# python (connectors/, tools/coa-pack/ — run via uv)
 __pycache__/
 *.py[cod]
 .venv/
@@ -57,5 +57,15 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 
-# CDK synth output (generated)
-infra/cdk.out/
+# ASH (Automated Security Helper) scan output — generated; keep config (.ash/.ash.yaml), not results
+.ash/ash_output/
+ash_output/
+# Internal demo scripts / sales enablement — local-only, not published
+demo/
+
+# transient security-scan staging
+.sgscan/
+.sgscan-out/
+
+# local license-review artifacts for SG ticket (not shipped)
+license-review/

@@ -9,7 +9,7 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 
-export class ContextforgeStack extends cdk.Stack {
+export class GroundworkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
@@ -68,7 +68,7 @@ export class ContextforgeStack extends cdk.Stack {
         exports.handler = async (event) => ({
           statusCode: 200,
           headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-          body: JSON.stringify({ message: "ContextForge API", version: "1.0.0" })
+          body: JSON.stringify({ message: "GroundWork API", version: "1.0.0" })
         });
       `),
       environment: { TABLE_NAME: configTable.tableName },
@@ -77,7 +77,7 @@ export class ContextforgeStack extends cdk.Stack {
 
     // API Gateway
     const api = new apigateway.RestApi(this, "Api", {
-      restApiName: "ContextForge API",
+      restApiName: "GroundWork API",
       defaultCorsPreflightOptions: { allowOrigins: apigateway.Cors.ALL_ORIGINS, allowMethods: apigateway.Cors.ALL_METHODS },
     });
     api.root.addResource("health").addMethod("GET", new apigateway.LambdaIntegration(apiHandler));

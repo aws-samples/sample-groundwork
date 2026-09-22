@@ -1,7 +1,6 @@
 {
-  "name": "contextforge",
+  "name": "groundwork",
   "version": "0.1.0",
-  "license": "MIT-0",
   "private": true,
   "scripts": {
     "dev": "next dev",

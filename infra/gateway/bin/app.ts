@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// Copyright ContextForge. SPDX-License-Identifier: Apache-2.0
+// Copyright GroundWork. SPDX-License-Identifier: Apache-2.0
 //
 // Deploy:
 //   npx cdk deploy \
 //     -c coaMcpEndpoint=https://bedrock-agentcore.us-east-1.amazonaws.com/runtimes/.../mcp \
 //     -c authMode=jwt \
 //     -c discoveryUrl=https://your-idp/.well-known/openid-configuration \
-//     -c allowedAudience=contextforge-gateway
+//     -c allowedAudience=groundwork-gateway
 //
 // Everything is context-driven rather than env-var driven so `cdk synth` output
 // is reproducible from the command line alone.
@@ -56,7 +56,7 @@ function parseAuthMode(raw: string | undefined): InboundAuthMode {
   return value as InboundAuthMode;
 }
 
-const prefix = optionalContext("namePrefix") ?? "contextforge";
+const prefix = optionalContext("namePrefix") ?? "groundwork";
 
 new GatewayStack(app, `${prefix}-gateway`, {
   coaMcpEndpoint: requiredContext("coaMcpEndpoint"),

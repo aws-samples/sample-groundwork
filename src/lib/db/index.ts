@@ -2,12 +2,12 @@ import Database from "better-sqlite3";
 import path from "path";
 
 /**
- * DB location. Defaults to <cwd>/contextforge.db for local dev. In a container
+ * DB location. Defaults to <cwd>/groundwork.db for local dev. In a container
  * the app dir is read-only (and WAL needs to write sidecar files), so set
- * DB_PATH to a writable path like /tmp/contextforge.db — the entrypoint seeds a
+ * DB_PATH to a writable path like /tmp/groundwork.db — the entrypoint seeds a
  * copy there. See Dockerfile.
  */
-const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), "contextforge.db");
+const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), "groundwork.db");
 
 let _db: Database.Database | null = null;
 

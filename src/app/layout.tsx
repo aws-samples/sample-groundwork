@@ -5,7 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "ContextForge — Semantic Context Engineering Platform",
+  title: "GroundWork — Semantic Context Engineering Platform",
   description: "Build, configure, and query semantic context layers with GraphRAG on AWS",
 };
 

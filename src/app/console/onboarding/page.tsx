@@ -142,7 +142,7 @@ export default function OnboardingPage() {
         </div>
         <p className="text-xs text-zinc-400 leading-relaxed">
           Once you provide <code className="text-zinc-300">nodes.json</code>, <code className="text-zinc-300">edges.json</code>, and configure at least one connector,
-          ContextForge will automatically: ingest documents → chunk → embed (Titan V2) → extract entities (Claude) → build knowledge graph (Neptune) → enable GraphRAG queries.
+          GroundWork will automatically: ingest documents → chunk → embed (Titan V2) → extract entities (Claude) → build knowledge graph (Neptune) → enable GraphRAG queries.
           Total setup time: ~15 minutes for a new vertical.
         </p>
       </section>

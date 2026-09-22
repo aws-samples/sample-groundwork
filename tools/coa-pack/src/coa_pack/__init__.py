@@ -1,4 +1,4 @@
-"""coa-pack — install ContextForge vertical packs into Context Ontology Accelerator."""
+"""coa-pack — install GroundWork vertical packs into Context Ontology Accelerator."""
 
 from .client import CoaClient
 from .errors import (

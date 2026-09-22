@@ -1,6 +1,6 @@
 """Connector CLI.
 
-    # Use a globally-unique bucket you own, e.g. contextforge-feeds-<account-id>-<region>.
+    # Use a globally-unique bucket you own, e.g. groundwork-feeds-<account-id>-<region>.
     # S3 names are global; a short generic name can be squatted by another account.
     cf-connect kev      --bucket <your-unique-feeds-bucket> --ics-only
     cf-connect nvd      --bucket <your-unique-feeds-bucket> --keyword siemens --limit 500

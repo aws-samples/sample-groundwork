@@ -1,6 +1,7 @@
 import type { ContextProvider } from "./provider";
 import { VERTICAL_TO_PACK } from "./pack-loader";
-import { getCoaToken } from "./coa-token";
+import { getCoaToken, readSub } from "./coa-token";
+import { agentCoreQuery, buildAgentCoreEndpoint } from "./coa-agentcore";
 import { resolveSourceSystem } from "./source-systems";
 import { getCachedAnswer } from "./coa-cache";
 import type { Citation } from "./types";
@@ -137,7 +138,7 @@ function buildGraphCitations(supporting: unknown, vertical: string): Citation[] 
  * packages/mcp-server/src/coa_mcp/server.py):
  *   query · translate_sparql · rag_retrieval · graph_traversal ·
  *   list_metrics · describe_schema
- * All are namespace-scoped. ContextForge maps one vertical → one COA namespace
+ * All are namespace-scoped. GroundWork maps one vertical → one COA namespace
  * (the same namespace a pack is installed into via `coa-pack install`).
  *
  * Transport note: COA's tools run over MCP (on AgentCore Runtime) and, for
@@ -157,6 +158,15 @@ export class CoaProvider implements ContextProvider {
   private readonly initialToken?: string;
   /** Optional per-vertical namespace override (env: COA_NAMESPACE_OTSEC, ...). */
   private readonly namespaceOverride: Record<string, string>;
+  /**
+   * Query transport. "rest" (default) uses the API-Gateway REST surface — simple
+   * and portable, but capped at ~29s by API Gateway. "agentcore" sends the slow
+   * `query` synthesis over the AgentCore Runtime SSE endpoint instead, which has
+   * no 29s ceiling (serve allows ~170s). Set COA_TRANSPORT=agentcore +
+   * COA_SERVE_RUNTIME_ARN to enable. All other (fast) tools stay on REST.
+   */
+  private readonly transport: "rest" | "agentcore";
+  private readonly serveRuntimeArn?: string;
 
   /**
    * Resolve a COA OIDC bearer token for this request. Precedence:
@@ -182,6 +192,8 @@ export class CoaProvider implements ContextProvider {
     }
     this.baseUrl = baseUrl.replace(/\/+$/, "");
     this.initialToken = token;
+    this.transport = process.env.COA_TRANSPORT === "agentcore" ? "agentcore" : "rest";
+    this.serveRuntimeArn = process.env.COA_SERVE_RUNTIME_ARN || undefined;
     this.namespaceOverride = {
       otsec: process.env.COA_NAMESPACE_OTSEC ?? "",
       energy: process.env.COA_NAMESPACE_ENERGY ?? "",
@@ -529,6 +541,38 @@ export class CoaProvider implements ContextProvider {
   private async callTool(tool: string, args: Record<string, unknown>): Promise<any> {
     const { namespace_id, ...body } = args as { namespace_id?: string } & Record<string, unknown>;
     const ns = encodeURIComponent(String(namespace_id ?? ""));
+
+    // AgentCore SSE transport — only for the slow `query` synthesis, and only
+    // when explicitly enabled with a runtime ARN. This is the one call that
+    // exceeds API Gateway's 29s cap; the fast tools (metrics/schema/traverse/
+    // kb-search) stay on REST. Any misconfiguration or per-request failure falls
+    // through to the REST path below so behaviour degrades rather than breaks.
+    if (this.transport === "agentcore" && tool === "query") {
+      const region = process.env.AWS_REGION || "us-west-2";
+      const endpoint = buildAgentCoreEndpoint(region, this.serveRuntimeArn);
+      const token = await this.resolveToken();
+      if (endpoint && token) {
+        try {
+          const { query, ...rest } = body as { query?: string } & Record<string, unknown>;
+          // Serve resolves execute/tier/etc. from the request options; forward
+          // the same knobs the REST body carried (minus the query string).
+          return await agentCoreQuery({
+            endpoint,
+            token,
+            sub: readSub(token),
+            namespace: String(namespace_id ?? ""),
+            query: String(query ?? ""),
+            options: rest,
+          });
+        } catch (err) {
+          // Log and fall back to REST — a transient AgentCore failure should not
+          // be worse than the REST path we already tolerate.
+          console.warn(
+            `CoaProvider: AgentCore query failed, falling back to REST — ${(err as Error).message}`
+          );
+        }
+      }
+    }
 
     const routes: Record<string, { method: "GET" | "POST"; path: string }> = {
       query: { method: "POST", path: `/namespaces/${ns}/query` },

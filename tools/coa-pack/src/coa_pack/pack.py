@@ -1,6 +1,6 @@
 """Pack model and offline validation.
 
-A ContextForge vertical pack is a directory:
+A GroundWork vertical pack is a directory:
 
     packs/<name>/
       pack.yaml           metadata + which files to load
@@ -106,9 +106,64 @@ class Pack:
 
     @property
     def metrics_yaml(self) -> str | None:
+        """The OSI YAML to POST to import-osi.
+
+        Packs author per-metric COA fields under a readable ``x_coa:`` mapping,
+        but COA's osi_parser only reads a metric's data_source_id/source_table
+        from ``custom_extensions: [{vendor_name: COA, data: {...}}]`` — an
+        ``x_coa`` key is silently ignored, so the metric imports with no source
+        binding and never resolves at query time. Translate ``x_coa`` into the
+        wire shape COA expects at emit time, leaving the on-disk pack readable.
+        Files with no ``x_coa`` (already in custom_extensions form) pass through
+        unchanged.
+        """
         if self.metrics_path is None:
             return None
-        return self.metrics_path.read_text(encoding="utf-8")
+        raw = self.metrics_path.read_text(encoding="utf-8")
+        if "x_coa:" not in raw:
+            return raw
+        return _translate_x_coa_to_custom_extensions(raw)
+
+
+def _translate_x_coa_to_custom_extensions(raw: str) -> str:
+    """Rewrite each metric's ``x_coa`` mapping into COA's ``custom_extensions``.
+
+    COA's osi_parser (packages/metric-service/src/coa_metrics/osi_parser.py)
+    reads per-metric vendor data ONLY from
+    ``custom_extensions: [{vendor_name: "COA", data: {...}}]``. The pack's
+    readable ``x_coa: {...}`` shorthand is otherwise dropped, leaving the metric
+    with no data_source_id/source_table binding. This emit-time translation is
+    lossless for the fields COA consumes and leaves any metric already using
+    ``custom_extensions`` untouched.
+    """
+    try:
+        doc = yaml.safe_load(raw)
+    except yaml.YAMLError:
+        # If it does not parse we cannot safely rewrite it; hand back the raw
+        # text and let COA's parser surface the error verbatim.
+        return raw
+    if not isinstance(doc, dict):
+        return raw
+    metrics = doc.get("metrics")
+    if not isinstance(metrics, list):
+        return raw
+
+    changed = False
+    for metric in metrics:
+        if not isinstance(metric, dict) or "x_coa" not in metric:
+            continue
+        data = metric.pop("x_coa")
+        if metric.get("custom_extensions"):
+            # Author supplied both — keep the explicit custom_extensions and drop
+            # the redundant x_coa rather than fight over precedence.
+            changed = True
+            continue
+        metric["custom_extensions"] = [{"vendor_name": "COA", "data": data}]
+        changed = True
+
+    if not changed:
+        return raw
+    return yaml.safe_dump(doc, sort_keys=False, width=100, allow_unicode=True)
 
 
 def _classify_ontology(path: Path, findings: list[tuple[str, str]]) -> OntologyFile | None:

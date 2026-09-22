@@ -6,7 +6,7 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 
-const DB_PATH = path.join(process.cwd(), "contextforge.db");
+const DB_PATH = path.join(process.cwd(), "groundwork.db");
 const DATASETS_DIR = path.join(process.cwd(), "src/data/datasets");
 
 // Shapes of the dataset JSON files under src/data/datasets/<vertical>/.

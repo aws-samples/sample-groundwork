@@ -1,4 +1,4 @@
-@prefix eo:   <https://contextforge.io/ontology/energy-outage#> .
+@prefix eo:   <https://groundwork.io/ontology/energy-outage#> .
 @prefix owl:  <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
@@ -7,9 +7,9 @@
 
 # ── Ontology declaration ──────────────────────────────────────────────────────
 
-<https://contextforge.io/ontology/energy-outage>
+<https://groundwork.io/ontology/energy-outage>
     a owl:Ontology ;
-    dcterms:title "ContextForge Energy Outage Ontology" ;
+    dcterms:title "GroundWork Energy Outage Ontology" ;
     dcterms:description """Electric distribution outage domain model: outages, network
         assets, crews, access obstacles, affected customers, and root causes. The
         electrical topology is modelled with a transitive `feeds` relation so

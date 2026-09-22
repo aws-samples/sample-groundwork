@@ -1,4 +1,4 @@
-// Copyright ContextForge. SPDX-License-Identifier: Apache-2.0
+// Copyright GroundWork. SPDX-License-Identifier: Apache-2.0
 import * as cdk from "aws-cdk-lib";
 import { Annotations, Match, Template } from "aws-cdk-lib/assertions";
 import {
@@ -39,7 +39,7 @@ function makeStack(
       (overrides.authMode === InboundAuthMode.JWT || overrides.authMode === undefined
         ? DISCOVERY_URL
         : undefined),
-    allowedAudience: overrides.allowedAudience ?? ["contextforge-gateway"],
+    allowedAudience: overrides.allowedAudience ?? ["groundwork-gateway"],
     enablePolicyEngine: overrides.enablePolicyEngine,
     policyEngineAuditOnly: overrides.policyEngineAuditOnly,
     enableSemanticSearch: overrides.enableSemanticSearch,
@@ -125,7 +125,7 @@ describe("GatewayStack", () => {
         AuthorizerConfiguration: Match.objectLike({
           CustomJWTAuthorizer: Match.objectLike({
             DiscoveryUrl: DISCOVERY_URL,
-            AllowedAudience: ["contextforge-gateway"],
+            AllowedAudience: ["groundwork-gateway"],
           }),
         }),
       });
@@ -226,7 +226,7 @@ describe("GatewayStack", () => {
       const statement = restrict!.Properties.Definition.Cedar.Statement as string;
 
       expect(statement).toContain("forbid");
-      expect(statement).toContain("contextforge:data-access");
+      expect(statement).toContain("groundwork:data-access");
       for (const tool of COA_DATA_TOOLS) {
         expect(statement).toContain(`coa___${tool}`);
       }
@@ -313,7 +313,7 @@ describe("GatewayStack", () => {
 
 describe("toPolicyName", () => {
   it("replaces characters CloudFormation rejects", () => {
-    expect(toPolicyName("contextforge-prod")).toBe("contextforge_prod");
+    expect(toPolicyName("groundwork-prod")).toBe("groundwork_prod");
     expect(toPolicyName("cf.demo/1")).toBe("cf_demo_1");
   });
 
@@ -323,6 +323,6 @@ describe("toPolicyName", () => {
   });
 
   it("leaves an already-valid name alone", () => {
-    expect(toPolicyName("contextforge")).toBe("contextforge");
+    expect(toPolicyName("groundwork")).toBe("groundwork");
   });
 });

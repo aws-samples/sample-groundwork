@@ -1,4 +1,4 @@
-# Running ContextForge
+# Running GroundWork
 
 ## Prerequisites
 
@@ -143,8 +143,8 @@ curl -s -X POST http://localhost:3000/api/ingest \
 
 ```bash
 # Set up credentials
-# ensure your AWS credentials are configured (e.g. ~/.aws/credentials,
-# AWS_PROFILE, or your organization's SSO/credential process)
+mwinit
+# or ensure ~/.aws/credentials is configured
 
 # Ingest documents from S3
 curl -s -X POST http://localhost:3000/api/extract \
@@ -171,7 +171,7 @@ With these set, the extraction pipeline will use Claude to extract entities AND 
 
 ```bash
 # Delete the database file and re-seed
-rm contextforge.db
+rm groundwork.db
 npm run db:seed
 ```
 
@@ -180,8 +180,8 @@ npm run db:seed
 ## Project Structure (key files)
 
 ```
-contextforge/
-├── contextforge.db           # SQLite database (auto-created by seed)
+groundwork/
+├── groundwork.db           # SQLite database (auto-created by seed)
 ├── scripts/seed.ts           # Database seeder (npm run db:seed)
 ├── src/
 │   ├── app/api/
@@ -204,8 +204,8 @@ contextforge/
 
 | Issue | Fix |
 |-------|-----|
-| `npm run db:seed` fails | Delete `contextforge.db` and retry |
+| `npm run db:seed` fails | Delete `groundwork.db` and retry |
 | NVD API returns 403 | Rate limited — wait 30 seconds or add NVD_API_KEY to .env.local |
 | Extraction returns 0 entities | Text too short or no known patterns — try with CVE IDs or group names |
-| S3 connector fails | Ensure AWS credentials are valid, the bucket exists, and the region matches |
+| S3 connector fails | Run `mwinit` first, ensure bucket exists and region matches |
 | Build fails on `better-sqlite3` | Run `npm approve-scripts --all` then `npm install` |

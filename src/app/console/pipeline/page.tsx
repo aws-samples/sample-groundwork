@@ -43,7 +43,7 @@ export default function PipelinePage() {
           ))}
         </PipelineCard>
         <PipelineCard title="Graph Construction">
-          {[["sonnet", "Claude 3.5 Sonnet v2", "Richer entities"], ["haiku", "Claude 3.5 Haiku", "Faster, cheaper"]].map(([v, l, d]) => (
+          {[["sonnet", "Claude Sonnet 4.5", "Richer entities"], ["haiku", "Claude Haiku 4.5", "Faster, cheaper"]].map(([v, l, d]) => (
             <label key={v} className={cn("flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-all border", graphModel === v ? "border-indigo-500/40 bg-indigo-950/20" : "border-transparent hover:bg-white/[0.02]")}>
               <input type="radio" name="graph" value={v} checked={graphModel === v} onChange={() => setGraphModel(v)} className="accent-indigo-500" />
               <div><div className={cn("text-sm", graphModel === v ? "text-white" : "text-zinc-400")}>{l}</div><div className="text-[11px] text-zinc-600">{d}</div></div>

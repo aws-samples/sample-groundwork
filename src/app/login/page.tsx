@@ -51,7 +51,7 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-3">
             <svg className="w-8 h-8" viewBox="0 0 40 40" fill="none"><path d="M20 4L36 12v16L20 36 4 28V12L20 4z" fill="url(#lg)" /><path d="M14 20c0-3.3 2.7-6 6-6s6 2.7 6 6-2.7 6-6 6-6-2.7-6-6z" fill="#fff" fillOpacity="0.9"/><path d="M18 18l2 4 2-4" stroke="#232f3e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><defs><linearGradient id="lg" x1="4" y1="4" x2="36" y2="36"><stop stopColor="#6366f1"/><stop offset="1" stopColor="#a855f7"/></linearGradient></defs></svg>
-            <span className="text-2xl font-bold"><span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Context</span><span className="text-white">Forge</span></span>
+            <span className="text-2xl font-bold"><span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Ground</span><span className="text-white">Work</span></span>
           </div>
           <p className="text-sm text-zinc-500">Semantic Context Engineering Platform</p>
         </div>

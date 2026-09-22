@@ -1,6 +1,6 @@
 # Mode 3 — Live COA
 
-> How to take the same ContextForge UI from a laptop demo (Modes 1–2) to a real
+> How to take the same GroundWork UI from a laptop demo (Modes 1–2) to a real
 > Context Ontology Accelerator (COA) deployment on your own AWS account, backed by
 > real data and reachable by agents. This is the production on-ramp.
 >
@@ -36,10 +36,10 @@ resolve over Neptune with governed metrics and Cedar authorization.
 
 ```bash
 # ~/.aws/config
-[profile contextforge]
+[profile groundwork]
 region=us-west-2
-# Configure credentials for your AWS credential provider — e.g. AWS IAM
-# Identity Center (SSO), a credential_process helper, or static keys.
+credential_process=/Users/<you>/.toolbox/bin/ada credentials print \
+  --account <YOUR_AWS_ACCOUNT_ID> --role <YOUR_ADMIN_ROLE> --provider isengard
 ```
 
 Turn on the two Bedrock flips (no code change):
@@ -75,7 +75,7 @@ with `SCL_PREFIX`.
 
 ```bash
 # in the COA checkout
-SCL_VPC_ID=vpc-abc SCL_PREFIX=contextforge make deploy-dev
+SCL_VPC_ID=vpc-abc SCL_PREFIX=groundwork make deploy-dev
 ```
 
 Note the resulting API endpoint — that becomes `COA_BASE_URL`.
@@ -100,11 +100,11 @@ Repeat for `energy-outage` (`--namespace energy`) and `manufacturing`.
 ## Step 3 — Land real data
 
 **Public feeds → S3 (then register as a COA DOCUMENTS source).** the ontology-layer Python
-connectors normalize NVD / CISA KEV / MITRE ATT&CK ICS to Markdown in S3:
+connectors normalize NVD / CISA KEV / MITRE ATT&CK ICS to Markdown in S3.
 
 > **Create your own bucket first.** Use a globally-unique name you own — include
 > your account ID and region so it can't be pre-registered by anyone else, e.g.
-> `contextforge-feeds-<your-account-id>-<region>`. S3 bucket names are global;
+> `groundwork-feeds-<your-account-id>-<region>`. S3 bucket names are global;
 > a short generic name can be squatted by another account, causing the connector
 > to write to a bucket you don't control.
 
@@ -123,7 +123,7 @@ COA supports `JDBC_DATABASE` and `GLUE_DATABASE` sources natively — register y
 Postgres/Redshift/Athena source in COA; no custom connector needed. (Cross-account
 data needs manual Lake Formation wiring — see docs/RUNNING.md.)
 
-## Step 4 — Point ContextForge at COA
+## Step 4 — Point GroundWork at COA
 
 ```bash
 # .env.local
@@ -138,11 +138,11 @@ COA_TOKEN=your-oidc-or-gateway-token
 (`src/lib/context/coa-provider.ts`) maps the app's calls onto COA's six query
 operations. Those operations are exposed **both** as MCP tools (for agents, via
 the AgentCore MCP runtime) **and** as plain REST on COA's Serve / Data-Layer
-surface (Smithy `DataLayerService`). ContextForge uses the **REST surface** —
+surface (Smithy `DataLayerService`). GroundWork uses the **REST surface** —
 which is served by the *same* API Gateway as the control plane, so one
 `COA_BASE_URL` covers everything:
 
-| ContextForge call | COA operation | REST route (on `COA_BASE_URL`) |
+| GroundWork call | COA operation | REST route (on `COA_BASE_URL`) |
 |---|---|---|
 | `query(…, "graph")` | `query` (tiered: metric → SPARQL → agentic) | `POST /namespaces/{ns}/query` |
 | `query(…, "vector")` | `rag_retrieval` | `POST /namespaces/{ns}/kb/search` |
@@ -155,10 +155,61 @@ All wire calls go through one method, `CoaProvider.callTool()`, which holds the
 route map above. If a deployment fronts the query surface differently (e.g. only
 the AgentCore MCP gateway, no REST), that one method is the only thing to adapt.
 
+### Query transport: REST (default) vs AgentCore SSE (no 29s cap)
+
+The REST routes above are served by COA's **API Gateway**, whose Lambda-proxy
+integration has a hard **~29s** response cap. COA's Tier-3 graph synthesis
+routinely runs 20-90s, so a graph `query` over REST intermittently returns a
+**504** at the gateway even though serve itself allows ~170s
+(`RESOLVE_TIMEOUT_S`). This is the single most common source of "the graph panel
+timed out" in a live demo.
+
+COA exposes the *same* query over its **Bedrock AgentCore Runtime** endpoint,
+which is a **different host** (not behind that API Gateway) and streams the
+answer back over SSE — so the 29s ceiling does not apply. GroundWork can send
+just the slow `query` call over that path via a transport switch:
+
+```bash
+# .env.local — opt in to the timeout-free query transport
+COA_TRANSPORT=agentcore
+# The serve runtime ARN. On a COA deployment it's in SSM at
+# /<your-coa-prefix>/serve/runtime-arn, e.g.:
+#   aws ssm get-parameter --name /my-coa-dev/serve/runtime-arn \
+#     --query Parameter.Value --output text
+COA_SERVE_RUNTIME_ARN=arn:aws:bedrock-agentcore:us-west-2:<account>:runtime/<id>
+```
+
+How it works (`src/lib/context/coa-agentcore.ts`, wired into `callTool()`):
+
+- **Only the `query` tool** takes the AgentCore path. The fast tools
+  (`list_metrics`, `describe_schema`, `graph_traversal`, `kb/search`) return well
+  under 29s, so they stay on REST — no reason to change them.
+- **Endpoint:** `https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{urlEncodedRuntimeArn}/invocations?qualifier=DEFAULT` (region-format-validated to prevent URL injection from a tampered ARN).
+- **Auth:** the *same* Cognito **ID token** the REST path already mints
+  (`coa-token.ts`). AgentCore validates the token audience and Cedar reads the
+  email/groups claims. Programmatic `USER_PASSWORD_AUTH` is enabled on the
+  default app client in COA **dev** environments; a machine-to-machine/agent auth
+  path is on COA's roadmap for prod-like environments.
+- **Session id:** the required `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id`
+  header (≥33 chars) is derived injectively from the token `sub` so a user's
+  requests stick to one session without two users ever colliding.
+- **SSE parsing:** AgentCore frames each event as `data: {json}`; the event type
+  is a `type` field *inside* the JSON (`step`/`token`/`done`/`error`), **not** the
+  SSE `event:` field. The consumer reads to the terminal frame and returns
+  `done.payload.result` — the exact `{ result: QueryResult }` shape the REST path
+  returns, so nothing downstream changes.
+- **Graceful fallback:** if `COA_SERVE_RUNTIME_ARN` is unset, the token is
+  missing, or the AgentCore call fails, `callTool()` logs and **falls back to the
+  REST path**. So enabling the flag can only help; a misconfiguration degrades to
+  today's behaviour rather than breaking.
+
+**Default stays `rest`** for portability — a customer cloning the sample gets the
+simple one-URL setup and opts into AgentCore only if they hit the 29s wall.
+
 ## Step 5 — Let agents ask too (AgentCore Gateway)
 
 the ontology-layer Gateway CDK (`infra/gateway/`) fronts COA's MCP server as an `mcpServer`
-target so a customer's *existing* agents can call the same tools ContextForge does.
+target so a customer's *existing* agents can call the same tools GroundWork does.
 
 ```bash
 cd infra/gateway
@@ -207,11 +258,11 @@ COA upstream only *validates* us-east-1; us-west-2 works, with the caveats here.
 
 ### Deploy from a space-free path
 
-The workspace path contains a space (`.../Kiro Apps/contextforge`). COA's Lambda
+The workspace path contains a space (`.../Kiro Apps/groundwork`). COA's Lambda
 bundling (`cp -r` + Finch volume mounts) does **not** quote paths, so local
 bundling and the Finch fallback both fail from a spaced path
 (`unsupported volume option "delegated"`, `cp: …-building: Not a directory`).
-**Fix:** deploy from a space-free copy, e.g. `~/coa-checkout`
+**Fix:** deploy from a space-free copy, e.g. `~/coa-deploy/coa`
 (`rsync -a --exclude node_modules --exclude 'cdk.out*' --exclude .venv …`). Bundling
 then works: esbuild for Node Lambdas, Finch container builds for the Python/ML
 Lambdas (torch, `unstructured`, spacy, llama-index, `owlready2`/`rdflib` VKG,
@@ -238,14 +289,14 @@ node_modules/.bin/cdk bootstrap aws://<YOUR_AWS_ACCOUNT_ID>/us-east-1
 ### SMUS / DataZone admin principal
 
 Set `SCL_SMUS_ADMIN_ARNS` explicitly to the IAM role(s) humans federate into —
-your admin roles:
+here the Isengard `*_admin` roles:
 
 ```bash
 export SCL_SMUS_ADMIN_ARNS=arn:aws:iam::<YOUR_AWS_ACCOUNT_ID>:role/<YOUR_ADMIN_ROLE>
 ```
 
-If unset, `deploy.sh` falls back to an IAM role literally named `Admin` (a
-common account convention). The fallback deploys, but only that role can admin
+If unset, `deploy.sh` falls back to an IAM role literally named `Admin` (an
+Isengard-account convention). The fallback deploys, but only that role can admin
 the DataZone/SMUS portal — set the ARNs so the real operators can.
 
 ### Clean stray synth output before deploy
@@ -260,8 +311,8 @@ and sees each project defined many times). Remove stray `cdk.out*` dirs, then
 No `timeout` on PATH — run long commands as a background PID + sleep-poll loop.
 
 ```bash
-cd ~/coa-checkout
-export PATH="/opt/homebrew/bin:$PATH"
+cd ~/coa-deploy/coa
+export PATH="/opt/homebrew/bin:$HOME/.groundwork-shims:$PATH"
 export AWS_PROFILE=<your-profile> AWS_DEFAULT_REGION=us-west-2 CDK_DEFAULT_REGION=us-west-2
 export SCL_PREFIX=<your-prefix> CDK_DOCKER=finch
 export SCL_SMUS_ADMIN_ARNS=arn:aws:iam::<YOUR_AWS_ACCOUNT_ID>:role/<YOUR_ADMIN_ROLE>
@@ -281,17 +332,17 @@ secret, so you can mint a token headlessly:
 ```bash
 # one-time: a user in the pool, with a permanent password, in the Admin group
 aws cognito-idp admin-create-user --user-pool-id <YOUR_COGNITO_USER_POOL_ID> \
-  --username you@example.com --message-action SUPPRESS \
-  --user-attributes Name=email,Value=you@example.com Name=email_verified,Value=true
+  --username you@amazon.com --message-action SUPPRESS \
+  --user-attributes Name=email,Value=you@amazon.com Name=email_verified,Value=true
 aws cognito-idp admin-set-user-password --user-pool-id <YOUR_COGNITO_USER_POOL_ID> \
-  --username you@example.com --password '<no-shell-special-chars>' --permanent
+  --username you@amazon.com --password '<no-shell-special-chars>' --permanent
 aws cognito-idp admin-add-user-to-group --user-pool-id <YOUR_COGNITO_USER_POOL_ID> \
-  --username you@example.com --group-name Admin      # REQUIRED — see below
+  --username you@amazon.com --group-name Admin      # REQUIRED — see below
 
 # mint (repeat when the ~1h token expires)
 aws cognito-idp initiate-auth --auth-flow USER_PASSWORD_AUTH \
   --client-id <YOUR_COGNITO_CLIENT_ID> \
-  --auth-parameters USERNAME=you@example.com,PASSWORD='<pw>' \
+  --auth-parameters USERNAME=you@amazon.com,PASSWORD='<pw>' \
   --query AuthenticationResult.IdToken --output text
 ```
 

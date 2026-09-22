@@ -33,7 +33,7 @@ def _echo_err(message: str) -> None:
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(package_name="coa-pack")
 def main() -> None:
-    """Install ContextForge vertical packs into a Context Ontology Accelerator namespace."""
+    """Install GroundWork vertical packs into a Context Ontology Accelerator namespace."""
 
 
 @main.command()

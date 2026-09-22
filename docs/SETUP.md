@@ -1,6 +1,6 @@
 # Setup
 
-Everything you need to run ContextForge after cloning — from a zero-AWS laptop
+Everything you need to run GroundWork after cloning — from a zero-AWS laptop
 demo to a live graph in your own AWS account. Nothing is hardcoded to any
 account; you supply your own values.
 
@@ -98,6 +98,40 @@ npm run demo:preflight   # verifies token, COA reachability, and seeded data
 Open the Query Playground, pick a vertical, and run a question — you'll see live
 Vector RAG (OpenSearch) vs GraphRAG (Neptune) side by side.
 
+### 3d. Add a live database as a source (optional — JDBC / RDS)
+
+Beyond document feeds, COA can front a live **relational database** (PostgreSQL,
+Redshift, MySQL, SQL Server, Snowflake, Oracle) as a first-class source: it
+discovers the schema, provisions a managed Glue federated catalog, and answers
+questions over the tables with the pack's governed metrics. The OT Security pack
+ships for exactly this — its `sources.yaml` documents the five tables and
+`metrics.osi.yaml` the six governed metrics.
+
+At a glance (full walk-through in [`docs/JDBC_OT_SECURITY_SCENARIO.md`](JDBC_OT_SECURITY_SCENARIO.md)):
+
+1. **Provision a database** in your account (e.g. RDS PostgreSQL). Keep it
+   **private** — put it in your COA VPC's private subnets and allow `5432` from
+   COA's source/serve security groups. Store creds in Secrets Manager as
+   `{"username": "...", "password": "..."}`.
+2. **Seed synthetic data** matching the pack's documented table shapes
+   (`ot_assets`, `vulnerabilities`, `asset_vulnerabilities`, `asset_connectivity`,
+   `compliance_controls`). Because the DB is private, seed from inside the VPC
+   (a short-lived Lambda or bastion) — the scenario doc includes a ready seed
+   dataset and loader.
+3. **Register it** as a COA `DATABASE` source with a `jdbcConfiguration`
+   (`POST /namespaces/{ns}/sources`), then **approve** the discovered tables
+   (`POST .../approve`). COA federates it and marks it queryable.
+4. **Install the pack** into the namespace so the ontology + governed metrics
+   bind to the source (`coa-pack install`, or the ontology-ingest + `import-osi`
+   steps). Metric `data_source_id` must resolve to the registered source id.
+5. Answers that draw on the DB are attributed to **"OT Asset Inventory
+   (PostgreSQL)"** in the citation panel.
+
+> **Query latency:** live graph synthesis can exceed API Gateway's ~29s cap and
+> 504. Set `COA_TRANSPORT=agentcore` + `COA_SERVE_RUNTIME_ARN` to route the query
+> over COA's AgentCore SSE endpoint (no 29s cap) — see the "Query transport"
+> section in [`docs/MODE3_COA.md`](MODE3_COA.md).
+
 ---
 
 ## 4. Configuration reference
@@ -110,6 +144,8 @@ Vector RAG (OpenSearch) vs GraphRAG (Neptune) side by side.
 | Deploy the app (App Runner) | `docs/DEPLOY_PUBLIC.md` |
 | COA deploy specifics | `docs/MODE3_COA.md` |
 | Exercising the three modes | `docs/TESTING_MODES.md` |
+| Live database (JDBC/RDS) source + seeding | `docs/JDBC_OT_SECURITY_SCENARIO.md` |
+| Query transport (REST vs AgentCore SSE) | `docs/MODE3_COA.md` |
 
 ---
 

@@ -41,6 +41,17 @@ const OTSEC_PATH: Array<{ match: RegExp; title: (stem: string) => string; system
   { match: /mitre-attack-ics\/software/i, title: (s) => `MITRE ATT&CK — software ${s}`, system: "MITRE ATT&CK (ICS)" },
   { match: /mitre-attack-ics/i, title: (s) => `MITRE ATT&CK — ${s}`, system: "MITRE ATT&CK (ICS)" },
   { match: /nvd|cve-/i, title: (s) => `CVE record ${s}`, system: "NVD (Vulnerability DB)" },
+  // Live relational source (COA JDBC_DATABASE). When an answer draws on the
+  // federated Postgres OT-inventory tables, COA's supportingContent references
+  // the table (e.g. "public.asset_vulnerabilities") rather than a document path.
+  // Attribute those facts to the database system of record so the GraphRAG panel
+  // cites "OT Asset Inventory (PostgreSQL)" — the multi-source story now spans a
+  // live database alongside the document feeds.
+  { match: /\b(public\.)?ot_assets\b/i, title: () => "OT asset inventory", system: "OT Asset Inventory (PostgreSQL)" },
+  { match: /\b(public\.)?asset_vulnerabilities\b/i, title: () => "Asset ↔ vulnerability mapping", system: "OT Asset Inventory (PostgreSQL)" },
+  { match: /\b(public\.)?vulnerabilities\b/i, title: () => "Vulnerability register", system: "OT Asset Inventory (PostgreSQL)" },
+  { match: /\b(public\.)?asset_connectivity\b/i, title: () => "Network reachability edges", system: "OT Asset Inventory (PostgreSQL)" },
+  { match: /\b(public\.)?compliance_controls\b/i, title: () => "Compliance control evidence", system: "OT Asset Inventory (PostgreSQL)" },
   { match: /sbom|asset|inventory/i, title: (s) => `Asset / SBOM entry ${s}`, system: "Asset Inventory (SBOM)" },
   { match: /advisor|threat/i, title: (s) => `Threat advisory ${s}`, system: "Threat Intel Feed" },
 ];

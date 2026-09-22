@@ -456,3 +456,62 @@ def test_discover_packs_finds_only_dirs_with_manifest(tmp_path, make_pack):
 
 def test_discover_packs_on_missing_dir_returns_empty(tmp_path):
     assert discover_packs(tmp_path / "nope") == []
+
+
+# ── x_coa -> custom_extensions translation (emit-time) ───────────────────────
+
+
+def test_metrics_yaml_translates_x_coa_to_custom_extensions(make_pack):
+    """COA's osi_parser reads per-metric vendor data only from custom_extensions.
+
+    The pack authors it as the readable `x_coa:` shorthand; metrics_yaml must
+    emit the `custom_extensions: [{vendor_name: COA, data: {...}}]` wire shape
+    COA expects, or the metric imports with no source binding and never resolves.
+    """
+    import yaml
+
+    pack = load_pack(make_pack())
+    emitted = pack.metrics_yaml
+    assert emitted is not None
+
+    doc = yaml.safe_load(emitted)
+    metric = doc["metrics"][0]
+    assert "x_coa" not in metric, "x_coa must not leak into the emitted OSI"
+    ext = metric["custom_extensions"]
+    assert ext == [
+        {
+            "vendor_name": "COA",
+            "data": {
+                "data_source_id": "ds-test",
+                "source_table": "public.widgets",
+                "return_type": "integer",
+            },
+        }
+    ]
+
+    # The on-disk pack file is left in its readable x_coa form — only the emitted
+    # content is translated.
+    assert "x_coa:" in (pack.metrics_path.read_text(encoding="utf-8"))
+
+
+def test_metrics_yaml_passes_through_custom_extensions_unchanged(make_pack):
+    """A pack already using custom_extensions (no x_coa) is emitted verbatim."""
+    osi = textwrap.dedent(
+        """\
+        osi_spec_version: "1.0"
+        metrics:
+          - name: widget_count
+            description: "Count of widgets"
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: "COUNT(*)"
+            custom_extensions:
+              - vendor_name: COA
+                data:
+                  data_source_id: ds-test
+                  source_table: public.widgets
+        """
+    )
+    pack = load_pack(make_pack(metrics=osi))
+    assert pack.metrics_yaml == osi

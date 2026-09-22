@@ -18,10 +18,10 @@ server mints its own Cognito token server-side. A login gate protects the URL.
 
 | Piece | What |
 |-------|------|
-| Image | `<YOUR_AWS_ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/contextforge:latest` (ECR) |
-| Build | AWS CodeBuild project `contextforge-image` (native **amd64** — local Apple-Silicon cross-builds segfault under emulation) |
-| Secrets | Secrets Manager `contextforge/app` → COA_USER/PASS, COA_CLIENT_ID, DEMO_USER/PASS, AUTH_SECRET (injected as env via `RuntimeEnvironmentSecrets`) |
-| Roles | `ContextForgeAppRunnerECRAccess` (pull image), `ContextForgeAppRunnerInstance` (read secret) |
+| Image | `<YOUR_AWS_ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/groundwork:latest` (ECR) |
+| Build | AWS CodeBuild project `groundwork-image` (native **amd64** — local Apple-Silicon cross-builds segfault under emulation) |
+| Secrets | Secrets Manager `groundwork/app` → COA_USER/PASS, COA_CLIENT_ID, DEMO_USER/PASS, AUTH_SECRET (injected as env via `RuntimeEnvironmentSecrets`) |
+| Roles | `GroundWorkAppRunnerECRAccess` (pull image), `GroundWorkAppRunnerInstance` (read secret) |
 | Token | `src/lib/context/coa-token.ts` auto-mints + caches + refreshes the Cognito id token; no token is baked into the image |
 | Gate | `src/proxy.ts` + `src/lib/auth.ts` — signed httpOnly cookie; enabled only when DEMO_USER/DEMO_PASS are set |
 
@@ -32,24 +32,24 @@ export AWS_PROFILE=<your-profile> AWS_DEFAULT_REGION=us-west-2
 BUCKET=<YOUR_BUILD_BUCKET>
 
 # 1. Package source (exclude heavy/irrelevant dirs) and upload
-zip -rq /tmp/cf-src.zip . \
+zip -rq /tmp/gw-src.zip . \
   -x 'node_modules/*' -x '.next/*' -x 'third_party/*' -x '.git/*' \
   -x 'infra/node_modules/*' -x 'infra/cdk.out/*' -x 'connectors/.venv/*' \
   -x 'tools/*/.venv/*' -x '*.db' -x '*.db-shm' -x '*.db-wal' -x '.env.local'
-aws s3 cp /tmp/cf-src.zip s3://$BUCKET/cf-src.zip
+aws s3 cp /tmp/gw-src.zip s3://$BUCKET/gw-src.zip
 
 # 2. Build the amd64 image (CodeBuild) — pushes to ECR:latest
-aws codebuild start-build --project-name contextforge-image
+aws codebuild start-build --project-name groundwork-image
 
 # 3. Roll the running service to the new image
-ARN=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='contextforge'].ServiceArn" --output text)
+ARN=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='groundwork'].ServiceArn" --output text)
 aws apprunner start-deployment --service-arn "$ARN"
 ```
 
 ## Rotate the demo password / COA creds
 
 ```bash
-aws secretsmanager put-secret-value --secret-id contextforge/app \
+aws secretsmanager put-secret-value --secret-id groundwork/app \
   --secret-string '{"COA_USER":"...","COA_PASS":"...","COA_CLIENT_ID":"...","DEMO_USER":"...","DEMO_PASS":"...","AUTH_SECRET":"..."}'
 # then roll the service (step 3 above) so it re-reads the secret
 ```

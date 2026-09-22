@@ -1,4 +1,4 @@
-// Copyright ContextForge. SPDX-License-Identifier: Apache-2.0
+// Copyright GroundWork. SPDX-License-Identifier: Apache-2.0
 import * as cdk from "aws-cdk-lib";
 import * as bedrockagentcore from "aws-cdk-lib/aws-bedrockagentcore";
 import * as iam from "aws-cdk-lib/aws-iam";
@@ -95,7 +95,7 @@ export interface GatewayStackProps extends cdk.StackProps {
    */
   readonly enableSemanticSearch?: boolean;
 
-  /** Prefix for resource names. @default "contextforge" */
+  /** Prefix for resource names. @default "groundwork" */
   readonly namePrefix?: string;
 }
 
@@ -131,7 +131,7 @@ const COA_TARGET_NAME = "coa";
 /**
  * Coerce a name into `^[A-Za-z][A-Za-z0-9_]*$`, which is what PolicyEngine and
  * Policy require. Every other AgentCore resource accepts hyphens, so a prefix
- * like "contextforge-prod" is perfectly valid elsewhere and rejected here.
+ * like "groundwork-prod" is perfectly valid elsewhere and rejected here.
  */
 export function toPolicyName(raw: string): string {
   const cleaned = raw.replace(/[^A-Za-z0-9_]/g, "_");
@@ -146,7 +146,7 @@ export class GatewayStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: GatewayStackProps) {
     super(scope, id, props);
 
-    const prefix = props.namePrefix ?? "contextforge";
+    const prefix = props.namePrefix ?? "groundwork";
     const authMode = props.authMode ?? InboundAuthMode.JWT;
     const enablePolicyEngine = props.enablePolicyEngine ?? true;
     const enableSemanticSearch = props.enableSemanticSearch ?? true;
@@ -156,7 +156,7 @@ export class GatewayStack extends cdk.Stack {
     // ── Gateway execution role ───────────────────────────────────────────────
     const gatewayRole = new iam.Role(this, "GatewayRole", {
       assumedBy: new iam.ServicePrincipal("bedrock-agentcore.amazonaws.com"),
-      description: "Execution role for the ContextForge AgentCore Gateway",
+      description: "Execution role for the GroundWork AgentCore Gateway",
     });
 
     // ── Inbound authorization ────────────────────────────────────────────────
@@ -188,7 +188,7 @@ export class GatewayStack extends cdk.Stack {
     // single MCP server combining every target's tools.
     //
     // Note the direction of travel. COA already runs an MCP server on AgentCore
-    // Runtime; we are NOT registering ContextForge as an MCP server. The gateway
+    // Runtime; we are NOT registering GroundWork as an MCP server. The gateway
     // fronts COA's existing one.
     const coaTarget = bedrockagentcore.GatewayTarget.forMcpServer(this, "CoaMcpTarget", {
       gateway: this.gateway,
@@ -313,7 +313,7 @@ export class GatewayStack extends cdk.Stack {
 
     const engine = new bedrockagentcore.CfnPolicyEngine(this, "PolicyEngine", {
       name: `${safePrefix}_tool_policies`,
-      description: "Tool-level authorization for the ContextForge gateway",
+      description: "Tool-level authorization for the GroundWork gateway",
     });
 
     // Two distinct enums, easy to conflate:
@@ -345,14 +345,14 @@ export class GatewayStack extends cdk.Stack {
       },
     });
 
-    // Data tools require an explicit `contextforge:data-access` scope. Absent a
+    // Data tools require an explicit `groundwork:data-access` scope. Absent a
     // grant of that scope the tool is denied at the gateway, before COA is
     // reached at all — which keeps unauthorised traffic off the Neptune and
     // Bedrock cost paths, not just off the data.
     new bedrockagentcore.CfnPolicy(this, "RestrictDataTools", {
       name: `${safePrefix}_restrict_data`,
       policyEngineId: engine.attrPolicyEngineId,
-      description: "Data-reaching tools require the contextforge:data-access scope",
+      description: "Data-reaching tools require the groundwork:data-access scope",
       enforcementMode: policyMode,
       definition: {
         cedar: {
@@ -364,7 +364,7 @@ export class GatewayStack extends cdk.Stack {
             ).join(", ")}],`,
             "  resource",
             ")",
-            'unless { context.scopes has "contextforge:data-access" };',
+            'unless { context.scopes has "groundwork:data-access" };',
           ].join("\n"),
         },
       },

@@ -1,4 +1,4 @@
-@prefix ots:  <https://contextforge.io/ontology/ot-security#> .
+@prefix ots:  <https://groundwork.io/ontology/ot-security#> .
 @prefix owl:  <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
@@ -10,9 +10,9 @@
 # not pass `ontologyId`. Declaring it explicitly keeps the IRI stable across
 # reinstalls instead of getting a random urn:ontology:upload-<hex> each time.
 
-<https://contextforge.io/ontology/ot-security>
+<https://groundwork.io/ontology/ot-security>
     a owl:Ontology ;
-    dcterms:title "ContextForge OT Security Ontology" ;
+    dcterms:title "GroundWork OT Security Ontology" ;
     dcterms:description """Operational-technology security domain model: threat groups,
         ICS techniques, vulnerabilities, OT assets, Purdue zoning, and compliance
         controls. Designed to answer reachability and blast-radius questions by
@@ -116,7 +116,7 @@ ots:residesIn a owl:ObjectProperty ;
 # canReach is transitive on purpose. This is what turns blast radius into a
 # reasoning question: assert only direct connectivity in the data, and the
 # reasoner derives the full reachable set. Without owl:TransitiveProperty this
-# collapses back into application-side BFS, which is exactly what ContextForge's
+# collapses back into application-side BFS, which is exactly what GroundWork's
 # client-side graph-engine.ts did and what this pack replaces.
 ots:canReach a owl:ObjectProperty, owl:TransitiveProperty ;
     rdfs:label "can reach" ;

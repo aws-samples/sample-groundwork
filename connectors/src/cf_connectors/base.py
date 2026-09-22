@@ -35,7 +35,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-USER_AGENT = "ContextForge-Connector/0.1 (+https://contextforge.io)"
+USER_AGENT = "GroundWork-Connector/0.1 (+https://groundwork.io)"
 DEFAULT_TIMEOUT = 60.0
 MAX_RETRIES = 5
 

@@ -24,8 +24,8 @@ tools
 **/.DS_Store
 
 # Local SQLite artifacts (the image reseeds its own DB during build)
-contextforge.db-shm
-contextforge.db-wal
+groundwork.db-shm
+groundwork.db-wal
 
 # Docs, presentation, misc
 docs

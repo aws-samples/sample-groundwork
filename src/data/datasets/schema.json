@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "description": "ContextForge Universal Schema Definition. Provide data in this format to onboard a new vertical.",
+  "description": "GroundWork Universal Schema Definition. Provide data in this format to onboard a new vertical.",
   "node_schema": {
     "required_fields": {
       "id": "Unique identifier for the entity (string)",
