@@ -1,0 +1,27 @@
+{
+  "name": "quick-mcp-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Thin remote HTTP MCP server that lets Amazon Quick query the same COA context GroundWork uses. Quick authenticates to this proxy via service (client_credentials) auth; the proxy mints COA's user OIDC token server-side and proxies a context_query tool to COA.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "smoke": "node scripts/smoke.mjs",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "jose": "6.2.12",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^20.0.0"
+  }
+}

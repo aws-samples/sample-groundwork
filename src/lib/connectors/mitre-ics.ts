@@ -17,6 +17,28 @@ export interface MitreSyncResult {
   errors: string[];
 }
 
+/** The subset of STIX 2.x object fields this connector reads. */
+interface StixObject {
+  type: string;
+  id: string;
+  name: string;
+  revoked?: boolean;
+  description?: string;
+  external_references?: Array<{ source_name: string; external_id?: string }>;
+  kill_chain_phases?: Array<{ phase_name: string }>;
+  aliases?: string[];
+  first_seen?: string;
+  last_seen?: string;
+  x_mitre_deprecated?: boolean;
+  x_mitre_platforms?: string[];
+  x_mitre_data_sources?: string[];
+  x_mitre_detection?: string;
+  x_mitre_aliases?: string[];
+  source_ref: string;
+  target_ref: string;
+  relationship_type?: string;
+}
+
 export async function syncMitreIcs(vertical: string): Promise<MitreSyncResult> {
   const result: MitreSyncResult = { techniques_fetched: 0, groups_fetched: 0, malware_fetched: 0, relationships_created: 0, errors: [] };
 
@@ -28,19 +50,19 @@ export async function syncMitreIcs(vertical: string): Promise<MitreSyncResult> {
     }
 
     const bundle = await response.json();
-    const objects = bundle.objects || [];
+    const objects: StixObject[] = bundle.objects || [];
 
     // Map STIX IDs to our node IDs for relationship linking
     const stixIdToNodeId = new Map<string, string>();
 
     // Process attack-patterns (techniques)
-    const techniques = objects.filter((o: any) => o.type === "attack-pattern" && !o.revoked && !o.x_mitre_deprecated);
+    const techniques = objects.filter((o) => o.type === "attack-pattern" && !o.revoked && !o.x_mitre_deprecated);
     for (const tech of techniques) {
-      const externalId = tech.external_references?.find((r: any) => r.source_name === "mitre-attack")?.external_id || "";
+      const externalId = tech.external_references?.find((r) => r.source_name === "mitre-attack")?.external_id || "";
       if (!externalId) continue;
 
       const nodeId = externalId.toLowerCase().replace(/\./g, "-");
-      const tactics = tech.kill_chain_phases?.map((p: any) => p.phase_name) || [];
+      const tactics = tech.kill_chain_phases?.map((p) => p.phase_name) || [];
 
       upsertNode(vertical, nodeId, externalId, "ICSTechnique", {
         name: tech.name,
@@ -56,9 +78,9 @@ export async function syncMitreIcs(vertical: string): Promise<MitreSyncResult> {
     }
 
     // Process intrusion-sets (groups)
-    const groups = objects.filter((o: any) => o.type === "intrusion-set" && !o.revoked);
+    const groups = objects.filter((o) => o.type === "intrusion-set" && !o.revoked);
     for (const group of groups) {
-      const externalId = group.external_references?.find((r: any) => r.source_name === "mitre-attack")?.external_id || "";
+      const externalId = group.external_references?.find((r) => r.source_name === "mitre-attack")?.external_id || "";
       const nodeId = group.name.toLowerCase().replace(/[^a-z0-9]/g, "-");
       const aliases = group.aliases || [];
 
@@ -75,7 +97,7 @@ export async function syncMitreIcs(vertical: string): Promise<MitreSyncResult> {
     }
 
     // Process malware
-    const malwareList = objects.filter((o: any) => o.type === "malware" && !o.revoked);
+    const malwareList = objects.filter((o) => o.type === "malware" && !o.revoked);
     for (const mal of malwareList) {
       const nodeId = mal.name.toLowerCase().replace(/[^a-z0-9]/g, "-");
       const aliases = mal.x_mitre_aliases || [];
@@ -91,7 +113,7 @@ export async function syncMitreIcs(vertical: string): Promise<MitreSyncResult> {
     }
 
     // Process relationships
-    const relationships = objects.filter((o: any) => o.type === "relationship" && !o.revoked);
+    const relationships = objects.filter((o) => o.type === "relationship" && !o.revoked);
     for (const rel of relationships) {
       const sourceNodeId = stixIdToNodeId.get(rel.source_ref);
       const targetNodeId = stixIdToNodeId.get(rel.target_ref);
@@ -116,8 +138,8 @@ export async function syncMitreIcs(vertical: string): Promise<MitreSyncResult> {
       `MITRE ICS Sync: ${result.techniques_fetched} techniques, ${result.groups_fetched} groups, ${result.malware_fetched} malware`,
       "framework", result.techniques_fetched + result.groups_fetched + result.malware_fetched, []);
 
-  } catch (err: any) {
-    result.errors.push(`MITRE sync error: ${err.message}`);
+  } catch (err) {
+    result.errors.push(`MITRE sync error: ${(err as Error).message}`);
   }
 
   return result;

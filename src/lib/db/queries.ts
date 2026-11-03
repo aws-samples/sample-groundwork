@@ -6,7 +6,7 @@ export interface DbNode {
   vertical: string;
   label: string;
   type: string;
-  properties: Record<string, any>;
+  properties: Record<string, unknown>;
 }
 
 export interface DbEdge {
@@ -15,7 +15,7 @@ export interface DbEdge {
   source_id: string;
   target_id: string;
   relation: string;
-  properties: Record<string, any>;
+  properties: Record<string, unknown>;
 }
 
 export interface DbDocument {
@@ -28,25 +28,31 @@ export interface DbDocument {
   chunks_count: number;
   entities_extracted: string[];
   content: string | null;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }
+
+// Raw SQLite rows: JSON columns come back as strings.
+type NodeRow = Omit<DbNode, "properties"> & { properties: string };
+type EdgeRow = Omit<DbEdge, "properties"> & { properties: string };
+type DocumentRow = Omit<DbDocument, "entities_extracted" | "metadata"> & { entities_extracted: string; metadata: string };
+type CountRow = { cnt: number };
 
 // --- Nodes ---
 
 export function getAllNodes(vertical: string): DbNode[] {
   const db = getDb();
-  const rows = db.prepare("SELECT * FROM nodes WHERE vertical = ?").all(vertical) as any[];
+  const rows = db.prepare("SELECT * FROM nodes WHERE vertical = ?").all(vertical) as NodeRow[];
   return rows.map((r) => ({ ...r, properties: JSON.parse(r.properties) }));
 }
 
 export function getNodeById(vertical: string, id: string): DbNode | undefined {
   const db = getDb();
-  const row = db.prepare("SELECT * FROM nodes WHERE vertical = ? AND id = ?").get(vertical, id) as any;
+  const row = db.prepare("SELECT * FROM nodes WHERE vertical = ? AND id = ?").get(vertical, id) as NodeRow | undefined;
   if (!row) return undefined;
   return { ...row, properties: JSON.parse(row.properties) };
 }
 
-export function upsertNode(vertical: string, id: string, label: string, type: string, properties: Record<string, any> = {}) {
+export function upsertNode(vertical: string, id: string, label: string, type: string, properties: Record<string, unknown> = {}) {
   const db = getDb();
   db.prepare(`
     INSERT INTO nodes (id, vertical, label, type, properties)
@@ -59,11 +65,11 @@ export function upsertNode(vertical: string, id: string, label: string, type: st
 
 export function getAllEdges(vertical: string): DbEdge[] {
   const db = getDb();
-  const rows = db.prepare("SELECT * FROM edges WHERE vertical = ?").all(vertical) as any[];
+  const rows = db.prepare("SELECT * FROM edges WHERE vertical = ?").all(vertical) as EdgeRow[];
   return rows.map((r) => ({ ...r, properties: JSON.parse(r.properties) }));
 }
 
-export function insertEdge(vertical: string, sourceId: string, targetId: string, relation: string, properties: Record<string, any> = {}) {
+export function insertEdge(vertical: string, sourceId: string, targetId: string, relation: string, properties: Record<string, unknown> = {}) {
   const db = getDb();
   db.prepare(`
     INSERT INTO edges (vertical, source_id, target_id, relation, properties)
@@ -84,7 +90,7 @@ export function traverseGraph(vertical: string, startNodeId: string, maxHops: nu
     const placeholders = frontier.map(() => "?").join(",");
     const edgeRows = db.prepare(`
       SELECT * FROM edges WHERE vertical = ? AND (source_id IN (${placeholders}) OR target_id IN (${placeholders}))
-    `).all(vertical, ...frontier, ...frontier) as any[];
+    `).all(vertical, ...frontier, ...frontier) as EdgeRow[];
 
     const nextFrontier: string[] = [];
     for (const row of edgeRows) {
@@ -102,8 +108,8 @@ export function traverseGraph(vertical: string, startNodeId: string, maxHops: nu
   // Fetch all visited nodes
   const idList = Array.from(visitedIds);
   const nodePlaceholders = idList.map(() => "?").join(",");
-  const nodeRows = db.prepare(`SELECT * FROM nodes WHERE vertical = ? AND id IN (${nodePlaceholders})`).all(vertical, ...idList) as any[];
-  const nodes = nodeRows.map((r: any) => ({ ...r, properties: JSON.parse(r.properties) }));
+  const nodeRows = db.prepare(`SELECT * FROM nodes WHERE vertical = ? AND id IN (${nodePlaceholders})`).all(vertical, ...idList) as NodeRow[];
+  const nodes: DbNode[] = nodeRows.map((r) => ({ ...r, properties: JSON.parse(r.properties) }));
 
   return { nodes, edges: resultEdges };
 }
@@ -112,7 +118,7 @@ export function traverseGraph(vertical: string, startNodeId: string, maxHops: nu
 
 export function getAllDocuments(vertical: string): DbDocument[] {
   const db = getDb();
-  const rows = db.prepare("SELECT * FROM documents WHERE vertical = ? ORDER BY ingested_at DESC").all(vertical) as any[];
+  const rows = db.prepare("SELECT * FROM documents WHERE vertical = ? ORDER BY ingested_at DESC").all(vertical) as DocumentRow[];
   return rows.map((r) => ({ ...r, entities_extracted: JSON.parse(r.entities_extracted), metadata: JSON.parse(r.metadata) }));
 }
 
@@ -135,8 +141,10 @@ export interface DbChunk {
   text: string;
   embedding: number[] | null;
   embedding_backend: string | null;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }
+
+type ChunkRow = Omit<DbChunk, "embedding" | "metadata"> & { embedding: string; metadata: string };
 
 export function insertChunk(
   vertical: string,
@@ -146,7 +154,7 @@ export function insertChunk(
   text: string,
   embedding: number[] | null,
   embeddingBackend: string | null,
-  metadata: Record<string, any> = {}
+  metadata: Record<string, unknown> = {}
 ) {
   const db = getDb();
   db.prepare(`
@@ -167,7 +175,7 @@ export function insertChunk(
 
 export function getChunkCount(vertical: string): number {
   const db = getDb();
-  return (db.prepare("SELECT COUNT(*) as cnt FROM chunks WHERE vertical = ?").get(vertical) as any).cnt;
+  return (db.prepare("SELECT COUNT(*) as cnt FROM chunks WHERE vertical = ?").get(vertical) as CountRow).cnt;
 }
 
 /**
@@ -181,7 +189,7 @@ export function searchChunksByVector(
   k: number = 4
 ): Array<{ chunk: DbChunk; score: number }> {
   const db = getDb();
-  const rows = db.prepare("SELECT * FROM chunks WHERE vertical = ? AND embedding IS NOT NULL").all(vertical) as any[];
+  const rows = db.prepare("SELECT * FROM chunks WHERE vertical = ? AND embedding IS NOT NULL").all(vertical) as ChunkRow[];
   const scored = rows.map((r) => {
     const embedding: number[] = JSON.parse(r.embedding);
     const chunk: DbChunk = {
@@ -199,19 +207,19 @@ export function searchChunksByVector(
 
 export function getGraphStats(vertical: string) {
   const db = getDb();
-  const nodeCount = (db.prepare("SELECT COUNT(*) as cnt FROM nodes WHERE vertical = ?").get(vertical) as any).cnt;
-  const edgeCount = (db.prepare("SELECT COUNT(*) as cnt FROM edges WHERE vertical = ?").get(vertical) as any).cnt;
-  const docCount = (db.prepare("SELECT COUNT(*) as cnt FROM documents WHERE vertical = ?").get(vertical) as any).cnt;
+  const nodeCount = (db.prepare("SELECT COUNT(*) as cnt FROM nodes WHERE vertical = ?").get(vertical) as CountRow).cnt;
+  const edgeCount = (db.prepare("SELECT COUNT(*) as cnt FROM edges WHERE vertical = ?").get(vertical) as CountRow).cnt;
+  const docCount = (db.prepare("SELECT COUNT(*) as cnt FROM documents WHERE vertical = ?").get(vertical) as CountRow).cnt;
 
-  const typeRows = db.prepare("SELECT type, COUNT(*) as cnt FROM nodes WHERE vertical = ? GROUP BY type").all(vertical) as any[];
+  const typeRows = db.prepare("SELECT type, COUNT(*) as cnt FROM nodes WHERE vertical = ? GROUP BY type").all(vertical) as Array<{ type: string; cnt: number }>;
   const nodesByType: Record<string, number> = {};
-  typeRows.forEach((r: any) => { nodesByType[r.type] = r.cnt; });
+  typeRows.forEach((r) => { nodesByType[r.type] = r.cnt; });
 
-  const relRows = db.prepare("SELECT relation, COUNT(*) as cnt FROM edges WHERE vertical = ? GROUP BY relation").all(vertical) as any[];
+  const relRows = db.prepare("SELECT relation, COUNT(*) as cnt FROM edges WHERE vertical = ? GROUP BY relation").all(vertical) as Array<{ relation: string; cnt: number }>;
   const edgesByRelation: Record<string, number> = {};
-  relRows.forEach((r: any) => { edgesByRelation[r.relation] = r.cnt; });
+  relRows.forEach((r) => { edgesByRelation[r.relation] = r.cnt; });
 
-  const totalChunks = (db.prepare("SELECT COALESCE(SUM(chunks_count), 0) as cnt FROM documents WHERE vertical = ?").get(vertical) as any).cnt;
+  const totalChunks = (db.prepare("SELECT COALESCE(SUM(chunks_count), 0) as cnt FROM documents WHERE vertical = ?").get(vertical) as CountRow).cnt;
 
   return { totalNodes: nodeCount, totalEdges: edgeCount, totalDocuments: docCount, nodesByType, edgesByRelation, totalChunks };
 }

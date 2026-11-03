@@ -4,6 +4,10 @@ import { enterprise, roles, classifications } from "@/data/enterprise";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Shield, Key, Users, ScrollText, Lock, Plus, Copy, Eye } from "lucide-react";
+import { useAppStore } from "@/lib/store";
+import { useApiJson } from "@/lib/use-api-json";
+import type { SourceEvent, SourcesResponse } from "@/lib/coa-source-shape";
+import { formatUtc } from "@/components/vertical-sources";
 
 const tabs = [
   { id: "team", label: "Team Members", icon: Users },
@@ -137,29 +141,52 @@ function GovernanceTab() {
   );
 }
 
+const AUDIT_ACTION: Record<SourceEvent["kind"], string> = {
+  "seed-ingested": "Seed document ingested",
+  "source-registered": "Source registered",
+  "source-scanned": "Source scanned",
+  "source-updated": "Source updated",
+};
+/** Strip the trailing verb the event title carries ("<name> ingested" → "<name>"). */
+function auditTarget(e: SourceEvent): string {
+  return e.title.replace(/ (ingested|registered|scanned|updated)$/, "");
+}
+
+/** Real source lifecycle events only (GET /api/sources), in absolute UTC. */
 function AuditTab() {
+  const { vertical } = useAppStore();
+  const { data, error, loading } = useApiJson<SourcesResponse>(`/api/sources?vertical=${encodeURIComponent(vertical)}`);
+  const events = data?.events ?? [];
   return (
-    <div className="rounded-xl border border-white/[0.06] overflow-hidden">
-      <table className="w-full text-sm">
-        <thead><tr className="border-b border-white/[0.06] bg-white/[0.02]">
-          <th className="text-left px-4 py-2.5 text-xs text-zinc-500 font-medium">Action</th>
-          <th className="text-left px-4 py-2.5 text-xs text-zinc-500 font-medium hidden md:table-cell">User</th>
-          <th className="text-left px-4 py-2.5 text-xs text-zinc-500 font-medium">Target</th>
-          <th className="text-left px-4 py-2.5 text-xs text-zinc-500 font-medium hidden md:table-cell">IP</th>
-          <th className="text-left px-4 py-2.5 text-xs text-zinc-500 font-medium">Time</th>
-        </tr></thead>
-        <tbody>
-          {enterprise.auditLog.map((a) => (
-            <tr key={a.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
-              <td className="px-4 py-2.5 text-zinc-200 text-xs">{a.action}</td>
-              <td className="px-4 py-2.5 text-zinc-400 text-xs hidden md:table-cell">{a.user}</td>
-              <td className="px-4 py-2.5 text-zinc-400 text-xs font-mono">{a.target}</td>
-              <td className="px-4 py-2.5 text-zinc-600 text-xs font-mono hidden md:table-cell">{a.ip}</td>
-              <td className="px-4 py-2.5 text-zinc-500 text-xs">{a.time}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-3">
+      <div className="rounded-xl border border-white/[0.06] overflow-hidden">
+        <table className="w-full text-sm">
+          <thead><tr className="border-b border-white/[0.06] bg-white/[0.02]">
+            <th className="text-left px-4 py-2.5 text-xs text-zinc-500 font-medium">Action</th>
+            <th className="text-left px-4 py-2.5 text-xs text-zinc-500 font-medium hidden md:table-cell">User</th>
+            <th className="text-left px-4 py-2.5 text-xs text-zinc-500 font-medium">Target</th>
+            <th className="text-left px-4 py-2.5 text-xs text-zinc-500 font-medium hidden md:table-cell">IP</th>
+            <th className="text-left px-4 py-2.5 text-xs text-zinc-500 font-medium">Time</th>
+          </tr></thead>
+          <tbody>
+            {events.map((e, i) => (
+              <tr key={`${e.at}-${i}`} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
+                <td className="px-4 py-2.5 text-zinc-200 text-xs">{AUDIT_ACTION[e.kind] ?? e.kind}</td>
+                <td className="px-4 py-2.5 text-zinc-400 text-xs hidden md:table-cell">{e.kind === "seed-ingested" ? "Seed loader" : "COA"}</td>
+                <td className="px-4 py-2.5 text-zinc-400 text-xs font-mono">{auditTarget(e)}</td>
+                <td className="px-4 py-2.5 text-zinc-600 text-xs font-mono hidden md:table-cell">—</td>
+                <td className="px-4 py-2.5 text-zinc-500 text-xs">{formatUtc(e.at)}</td>
+              </tr>
+            ))}
+            {events.length === 0 && (
+              <tr><td colSpan={5} className="px-4 py-4 text-xs text-zinc-500">
+                {loading ? "Loading…" : error ? `Events unavailable: ${error}` : "No source lifecycle events for this vertical."}
+              </td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[11px] text-zinc-500">Only source lifecycle events are shown. User and admin actions are not recorded in this demo.</p>
     </div>
   );
 }

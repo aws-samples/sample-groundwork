@@ -23,7 +23,7 @@ server mints its own Cognito token server-side. A login gate protects the URL.
 | Secrets | Secrets Manager `groundwork/app` → COA_USER/PASS, COA_CLIENT_ID, DEMO_USER/PASS, AUTH_SECRET (injected as env via `RuntimeEnvironmentSecrets`) |
 | Roles | `GroundWorkAppRunnerECRAccess` (pull image), `GroundWorkAppRunnerInstance` (read secret) |
 | Token | `src/lib/context/coa-token.ts` auto-mints + caches + refreshes the Cognito id token; no token is baked into the image |
-| Gate | `src/proxy.ts` + `src/lib/auth.ts` — signed httpOnly cookie; enabled only when DEMO_USER/DEMO_PASS are set |
+| Gate | `src/proxy.ts` + `src/lib/auth.ts` — signed httpOnly cookie. Fails closed: requires all of DEMO_USER, DEMO_PASS and AUTH_SECRET; with any missing, every route except `/api/health` returns 503. Never set `AUTH_LOCAL_BYPASS` on a deployment (it is for local 127.0.0.1 dev only) |
 
 ## Redeploy (after code changes)
 
@@ -75,7 +75,13 @@ aws secretsmanager put-secret-value --secret-id groundwork/app \
   Apple-Silicon build (Next build segfaults under QEMU).
 - **bind address:** Next standalone binds to `os.hostname()`; the container must
   launch with `HOSTNAME=0.0.0.0` (set in the Dockerfile CMD) or the health check
-  can't reach it — this is the #1 "health check failed" cause.
+  can't reach it — this is the #1 "health check failed" cause. That bind is
+  inside the container; the publish is the boundary. For a local container test,
+  publish to loopback only (`-p 127.0.0.1:3000:3000`), and outside a container
+  `npm run dev` / `npm start` bind `127.0.0.1`.
+- **gate secrets:** `/api/health` stays 200 when the gate is unconfigured, so a
+  missing DEMO_USER/DEMO_PASS/AUTH_SECRET passes the health check but serves 503
+  everywhere else. Check `GET /api/mode` returns 401 (not 503) after a deploy.
 - **SQLite in a read-only container:** the app dir is read-only and WAL writes
   sidecar files, so the DB is copied to `/tmp` at start and `DB_PATH` points there.
 - **namespace:** COA resolves namespaces by **UUID**, not name.

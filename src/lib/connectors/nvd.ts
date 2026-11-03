@@ -55,12 +55,12 @@ export async function syncNvd(options: NvdSyncOptions): Promise<NvdSyncResult> {
         if (!cve) continue;
 
         const cveId = cve.id; // e.g., "CVE-2024-3400"
-        const description = cve.descriptions?.find((d: any) => d.lang === "en")?.value || "";
+        const description = cve.descriptions?.find((d: { lang: string; value: string }) => d.lang === "en")?.value || "";
         const cvssData = cve.metrics?.cvssMetricV31?.[0]?.cvssData || cve.metrics?.cvssMetricV30?.[0]?.cvssData;
         const cvssScore = cvssData?.baseScore || 0;
-        const cweList = cve.weaknesses?.flatMap((w: any) => w.description?.map((d: any) => d.value)) || [];
+        const cweList = cve.weaknesses?.flatMap((w: { description?: Array<{ value: string }> }) => w.description?.map((d) => d.value)) || [];
         const published = cve.published || "";
-        const references = cve.references?.map((r: any) => r.url).slice(0, 5) || [];
+        const references = cve.references?.map((r: { url: string }) => r.url).slice(0, 5) || [];
 
         // Determine affected products from CPE
         const affectedProducts: string[] = [];
@@ -103,8 +103,8 @@ export async function syncNvd(options: NvdSyncOptions): Promise<NvdSyncResult> {
       } else {
         await new Promise((r) => setTimeout(r, 1000));
       }
-    } catch (err: any) {
-      result.errors.push(`Error fetching "${keyword}": ${err.message}`);
+    } catch (err) {
+      result.errors.push(`Error fetching "${keyword}": ${(err as Error).message}`);
     }
   }
 

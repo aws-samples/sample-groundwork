@@ -1,18 +1,130 @@
 export type Vertical = "cyber" | "energy" | "otsec" | "prodquality";
 
+/*
+ * Per-vertical presentation config. Every console page that differs between
+ * verticals reads one of these fields instead of branching on the vertical id,
+ * and every vertical carries every field so `verticals[vertical]` stays
+ * type-safe. Live data (sources, schema, events) comes from the API routes,
+ * never from here.
+ */
+export type VerticalIcon = "shield" | "zap" | "wrench";
+/** Source-type ids offered by the Add Source walkthrough. */
+export type AddSourceTypeId = "s3" | "web" | "api" | "csv" | "confluence" | "jdbc";
+export interface AddSourceConfig {
+  /** Hint shown on the Configure step. */
+  configureHint: string;
+  /** Prefilled display name and path per source type (placeholders only). */
+  defaults: Record<AddSourceTypeId, { name: string; path: string }>;
+}
+export interface CoaQuery {
+  question: string;
+}
+export interface VerticalPresentation {
+  /** Header workspace button label. */
+  workspaceName: string;
+  /** Header vertical toggle label. */
+  toggleLabel: string;
+  icon: VerticalIcon;
+  /** Graph node colour per entity type (the graph page falls back to a palette). */
+  graphColors: Record<string, string>;
+  addSource: AddSourceConfig;
+  /** Example questions for Live COA mode, when its corpus differs from the seed. */
+  coaQueries?: CoaQuery[];
+}
+
+const presentation: Record<Vertical, VerticalPresentation> = {
+  cyber: {
+    workspaceName: "Security Operations",
+    toggleLabel: "Cyber",
+    icon: "shield",
+    graphColors: {
+      ThreatActor: "#ef4444", CVE: "#f59e0b", Technique: "#8b5cf6", Malware: "#ec4899", Campaign: "#06b6d4", Asset: "#10b981", Indicator: "#6366f1",
+    },
+    addSource: {
+      configureHint: "Documents are parsed, chunked and embedded for vector search; CVEs, techniques and threat actors map onto the pack ontology.",
+      defaults: {
+        s3: { name: "Threat Intel Reports", path: "s3://<your-bucket>/threat-intel/" },
+        web: { name: "MITRE ATT&CK", path: "https://attack.mitre.org/techniques/" },
+        api: { name: "NVD CVE API", path: "https://services.nvd.nist.gov/rest/json/cves/2.0" },
+        csv: { name: "SBOM Registry", path: "sbom-enterprise-2024.json (CycloneDX)" },
+        confluence: { name: "Security Runbooks", path: "Confluence Space: SEC-OPS" },
+        jdbc: { name: "Security database", path: "jdbc:postgresql://<host>:5432/<database>" },
+      },
+    },
+  },
+  energy: {
+    workspaceName: "Grid Operations",
+    toggleLabel: "Energy",
+    icon: "zap",
+    graphColors: {
+      Outage: "#ef4444", Asset: "#10b981", Crew: "#3b82f6", Obstacle: "#f59e0b", Feeder: "#06b6d4", Customer: "#a855f7", RootCause: "#ec4899",
+    },
+    addSource: {
+      configureHint: "Documents are parsed, chunked and embedded for vector search; outages, assets, feeders and crews map onto the pack ontology.",
+      defaults: {
+        s3: { name: "NERC CIP Standards", path: "s3://<your-bucket>/nerc-cip/" },
+        web: { name: "FERC Regulations", path: "https://www.ferc.gov/industries-data/" },
+        api: { name: "Grid Telemetry API", path: "https://api.grid-ops.internal/v2/events" },
+        csv: { name: "Asset Registry", path: "asset-registry-substations.csv (550 records)" },
+        confluence: { name: "Maintenance Procedures", path: "Confluence Space: GRID-OPS" },
+        jdbc: { name: "Grid operations database", path: "jdbc:postgresql://<host>:5432/<database>" },
+      },
+    },
+  },
+  otsec: {
+    workspaceName: "OT Security Operations",
+    toggleLabel: "OT Sec",
+    icon: "shield",
+    graphColors: {
+      ThreatGroup: "#ef4444", Vulnerability: "#f59e0b", ICSTechnique: "#8b5cf6", Malware: "#ec4899", OTAsset: "#10b981", PurdueZone: "#06b6d4", Compliance: "#3b82f6",
+    },
+    addSource: {
+      configureHint: "Documents are parsed, chunked and embedded for vector search; threat groups, ICS techniques and OT assets map onto the pack ontology.",
+      defaults: {
+        s3: { name: "ICS-CERT Advisories", path: "s3://<your-bucket>/ics-advisories/" },
+        web: { name: "MITRE ATT&CK for ICS", path: "https://attack.mitre.org/matrices/ics/" },
+        api: { name: "OT Asset Inventory API", path: "https://<your-api>/ot-assets" },
+        csv: { name: "Vulnerability scan export", path: "ot-vuln-scan.csv" },
+        confluence: { name: "Plant runbooks", path: "Confluence Space: <PLANT-OPS>" },
+        jdbc: { name: "OT asset database", path: "jdbc:postgresql://<host>:5432/<database>" },
+      },
+    },
+    // Live COA runs against a different corpus (MITRE ATT&CK for ICS + NVD
+    // CVEs) than the local seed, so these presets replace the seed's hero
+    // questions in coa mode.
+    coaQueries: [
+      { question: "Which ICS threat groups can reach our PLCs and what techniques would they use?" },
+      { question: "What is CVE-2024-36401 in GeoServer, how severe is it, and how could it be exploited?" },
+      { question: "How can an attacker achieve persistence on a Siemens PLC?" },
+    ],
+  },
+  prodquality: {
+    workspaceName: "Product Quality",
+    toggleLabel: "Product Quality",
+    icon: "wrench",
+    graphColors: {
+      Product: "#f59e0b", ReviewCluster: "#ef4444", Region: "#06b6d4", Store: "#3b82f6", Return: "#ec4899", Component: "#10b981", ComponentLot: "#a855f7", Supplier: "#8b5cf6", PurchaseOrder: "#eab308", SupplierScorecard: "#14b8a6", RootCause: "#f43f5e", CorrectiveAction: "#22c55e",
+    },
+    addSource: {
+      configureHint: "Documents are parsed, chunked and embedded for vector search; products, components, lots and suppliers map onto the pack ontology.",
+      defaults: {
+        s3: { name: "QA Lab Reports", path: "s3://<your-bucket>/qa-reports/" },
+        web: { name: "Supplier portal bulletins", path: "https://<supplier-portal>/bulletins/" },
+        api: { name: "Returns / RMA API", path: "https://<your-api>/returns" },
+        csv: { name: "Bill of Materials export", path: "bom-export.csv" },
+        confluence: { name: "CAPA procedures", path: "Confluence Space: <QUALITY>" },
+        jdbc: { name: "Quality database", path: "jdbc:postgresql://<host>:5432/<database>" },
+      },
+    },
+  },
+};
+
 export const verticals = {
   cyber: {
+    ...presentation.cyber,
     name: "ThreatGraph Intelligence",
     description: "Cybersecurity threat intelligence & attack chain analysis",
     color: "red",
-    sources: [
-      { id: "s1", name: "NVD CVE Feed", type: "S3", status: "synced", lastSync: "2 min ago", docs: 500 },
-      { id: "s2", name: "MITRE ATT&CK", type: "Web", status: "synced", lastSync: "1 hr ago", docs: 201 },
-      { id: "s3", name: "Incident Reports", type: "S3", status: "syncing", lastSync: "—", docs: 24 },
-      { id: "s4", name: "SBOM Registry", type: "API", status: "error", lastSync: "—", docs: 0 },
-      { id: "s5", name: "CISA KEV Catalog", type: "S3", status: "synced", lastSync: "6 hr ago", docs: 1100 },
-    ],
-    graphStats: { nodes: 1847, edges: 3291, connected: 94.3, orphan: 5.7 },
     entityTypes: ["CVE", "ThreatActor", "Technique", "Malware", "Campaign", "Asset", "Indicator"],
     relationTypes: ["EXPLOITS", "USES_TECHNIQUE", "DEPLOYS_MALWARE", "CHAINS_TO", "AFFECTS_ASSET", "ATTRIBUTED_TO", "MITIGATED_BY"],
     graphNodes: [
@@ -70,21 +182,12 @@ export const verticals = {
         graphResult: { answer: "Volt Typhoon techniques targeting energy sector with detection methods:\n\n| Technique | Detection | SIEM Rule |\n|-----------|-----------|----------|\n| T1190 — Exploit Public App | WAF anomaly + auth failure spike | Alert on >5 failed logins from same IP in 60s |\n| T1059.001 — PowerShell | Script block logging + AMSI | Flag encoded commands >500 chars |\n| T1078 — Valid Accounts | Impossible travel + off-hours access | Baseline user geo + time patterns |\n\n3 additional techniques identified via CHAINS_TO traversal from known Volt Typhoon TTPs.", sources: 9, latency: 891, hops: 3 },
       },
     ],
-    monitor: { docsProcessed: 2341, chunksCreated: 14208, syncJobs: { ok: 8, fail: 1 }, graphAccuracy: 78, vectorAccuracy: 44, p50: 312, p99: 891, cacheHit: 67 },
   },
   energy: {
+    ...presentation.energy,
     name: "OutageGraph Intelligence",
     description: "Power outage root cause analysis & customer communication",
     color: "green",
-    sources: [
-      { id: "s1", name: "GIS Imagery Feed", type: "S3", status: "synced", lastSync: "5 min ago", docs: 1240 },
-      { id: "s2", name: "Drone Inspection Photos", type: "S3", status: "synced", lastSync: "22 min ago", docs: 387 },
-      { id: "s3", name: "SCADA Sensor Telemetry", type: "API", status: "synced", lastSync: "Real-time", docs: 8900 },
-      { id: "s4", name: "Work Order System", type: "CSV", status: "synced", lastSync: "10 min ago", docs: 2100 },
-      { id: "s5", name: "Crew Dispatch Logs", type: "API", status: "synced", lastSync: "3 min ago", docs: 450 },
-      { id: "s6", name: "Vegetation Management Reports", type: "S3", status: "syncing", lastSync: "—", docs: 76 },
-    ],
-    graphStats: { nodes: 3847, edges: 7291, connected: 97.2, orphan: 2.8 },
     entityTypes: ["Outage", "Asset", "Crew", "Obstacle", "Feeder", "Customer", "RootCause"],
     relationTypes: ["CAUSED_BY", "ASSIGNED_TO", "BLOCKING_ACCESS", "FEEDS", "AFFECTS_CUSTOMER", "CONNECTED_TO", "DELAYS_ETA", "EVIDENCED_BY", "SERVES"],
     graphNodes: [
@@ -145,22 +248,12 @@ export const verticals = {
         graphResult: { answer: "📋 Active Outages Dashboard (2 events):\n\n| Outage | Root Cause | Customers | Crew | Obstacle | ETA |\n|--------|-----------|-----------|------|----------|-----|\n| OE-4471 | TX-447 thermal overload (heat) | 2,400 (Zone A) | Alpha-7 | Vegetation on Rd-12 (+45min) | 5:15 PM |\n| OE-4472 | Storm — pole damage (wind) | 890 (Zone B) | Bravo-3 | Fallen oak on Elm St | 7:00 PM |\n\n🔗 Graph Insights:\n• Both outages are independent (no cascade relationship)\n• OE-4471: Drone evidence available (DI-0091) — thermal damage confirmed\n• OE-4472: Requires mutual aid (pole replacement specialty)\n• Total affected: 3,290 customers\n• Critical facilities on backup: Eastview Hospital, Zone A Water Pump Station", sources: 18, latency: 1102, hops: 5 },
       },
     ],
-    monitor: { docsProcessed: 4217, chunksCreated: 18493, syncJobs: { ok: 14, fail: 0 }, graphAccuracy: 91, vectorAccuracy: 38, p50: 289, p99: 1102, cacheHit: 74 },
   },
   otsec: {
+    ...presentation.otsec,
     name: "OT Security Intelligence",
     description: "ICS/OT threat analysis, blast radius mapping & compliance",
     color: "indigo",
-    sources: [
-      { id: "s1", name: "Dragos WorldView Intel", type: "API", status: "synced", lastSync: "1 hr ago", docs: 847 },
-      { id: "s2", name: "ICS-CERT Advisories", type: "S3", status: "synced", lastSync: "3 hr ago", docs: 312 },
-      { id: "s3", name: "MITRE ATT&CK for ICS", type: "Web", status: "synced", lastSync: "1 day ago", docs: 78 },
-      { id: "s4", name: "Asset Inventory (Dragos)", type: "API", status: "synced", lastSync: "15 min ago", docs: 308 },
-      { id: "s5", name: "NERC CIP Audit Reports", type: "S3", status: "synced", lastSync: "2 days ago", docs: 14 },
-      { id: "s6", name: "Network Traffic Analysis", type: "API", status: "synced", lastSync: "Real-time", docs: 4200 },
-      { id: "s7", name: "OT Vulnerability Scanner", type: "CSV", status: "synced", lastSync: "6 hr ago", docs: 156 },
-    ],
-    graphStats: { nodes: 4891, edges: 12340, connected: 98.7, orphan: 1.3 },
     entityTypes: ["ThreatGroup", "Vulnerability", "ICSTechnique", "Malware", "OTAsset", "PurdueZone", "Compliance"],
     relationTypes: ["USES_TECHNIQUE", "EXPLOITS", "DEPLOYS_MALWARE", "AFFECTS_ASSET", "RESIDES_IN", "CAN_REACH", "SUBJECT_TO", "CATEGORIZED_AS", "CONTROLS", "PROVIDES_ACCESS_TO", "IMPLEMENTS", "TARGETS"],
     graphNodes: [
@@ -218,22 +311,12 @@ export const verticals = {
         graphResult: { answer: "📋 NERC CIP COMPLIANCE + RISK CROSSWALK:\n\n| Standard | Status | Gap | Exploitable By | Attack Path Enabled |\n|----------|--------|-----|----------------|--------------------|\n| CIP-002-5.1a | ✅ Compliant | — | — | — |\n| CIP-005-7 | ❌ GAP | VPN unpatched 47 days | VOLTZITE | DMZ → full OT access |\n| CIP-007-6 | ❌ NON-COMPLIANT | 3 assets >90 days overdue | VOLTZITE, ELECTRUM, CHERNOVITE | Each unpatched asset is a pivot point |\n| CIP-010-4 | ✅ Compliant | — | — | — |\n| CIP-013-2 | ⚠️ In Progress | Siemens firmware process undocumented | Supply chain risk | CHERNOVITE-style supply chain attack |\n\n🔴 CRITICAL FINDING: CIP-005 + CIP-007 gaps create a complete kill chain:\n\nCIP-005 gap (unpatched VPN) → Initial Access\n  → CIP-007 gap (historian unpatched 112 days) → Pivot to Level 3\n    → CIP-007 gap (PLC firmware 94 days behind) → Reach Level 1\n      → Physical process manipulation possible\n\n💰 PENALTY EXPOSURE:\n• CIP-005 violation: up to $1,000,000/day\n• CIP-007 violations (×3): up to $3,000,000/day\n• Combined: $4M/day maximum penalty risk\n\n📅 REMEDIATION PRIORITY (risk-ranked):\n1. [IMMEDIATE] Patch VPN gateway — eliminates initial access vector\n2. [THIS WEEK] Update ControlLogix firmware — blocks PLC exploitation\n3. [THIS MONTH] Patch historian OS — breaks lateral movement path\n4. [Q3] Formalize Siemens supply chain process — CIP-013 compliance", sources: 28, latency: 1340, hops: 5 },
       },
     ],
-    monitor: { docsProcessed: 5891, chunksCreated: 24107, syncJobs: { ok: 18, fail: 0 }, graphAccuracy: 94, vectorAccuracy: 31, p50: 298, p99: 1340, cacheHit: 81 },
   },
   prodquality: {
+    ...presentation.prodquality,
     name: "Product Quality Intelligence",
     description: "Cross-source root-cause analysis: reviews → returns → components → suppliers",
     color: "amber",
-    sources: [
-      { id: "s1", name: "Retailer Review API", type: "API", status: "synced", lastSync: "20 min ago", docs: 4412 },
-      { id: "s2", name: "Returns / RMA System", type: "S3", status: "synced", lastSync: "1 hr ago", docs: 2870 },
-      { id: "s3", name: "POS / Store Sales", type: "CSV", status: "synced", lastSync: "2 hr ago", docs: 1180 },
-      { id: "s4", name: "PLM / Bill of Materials", type: "API", status: "synced", lastSync: "1 day ago", docs: 96 },
-      { id: "s5", name: "QA Lab Reports", type: "S3", status: "synced", lastSync: "5 hr ago", docs: 214 },
-      { id: "s6", name: "Supplier GRC (ServiceNow)", type: "API", status: "synced", lastSync: "3 hr ago", docs: 88 },
-      { id: "s7", name: "ERP Purchase Orders", type: "API", status: "synced", lastSync: "30 min ago", docs: 640 },
-    ],
-    graphStats: { nodes: 3120, edges: 8940, connected: 97.4, orphan: 2.6 },
     entityTypes: ["Product", "ReviewCluster", "Region", "Store", "Return", "Component", "ComponentLot", "Supplier", "SupplierScorecard", "PurchaseOrder", "RootCause", "CorrectiveAction"],
     relationTypes: ["HAS_REVIEWS", "CONCENTRATED_IN", "INCLUDES_STORE", "GENERATED_RETURNS", "RETURNS_OF", "FAULT_ISOLATED_TO", "INVESTIGATED_CLEARED", "HAS_COMPONENT", "BUILT_FROM_LOT", "SUPPLIED_BY", "SOURCED_VIA", "ISSUED_TO", "ROOT_CAUSED_BY", "INTRODUCED_BY", "PREDATES", "HAS_SCORECARD", "HAS_CORRECTIVE_ACTION", "QUARANTINES"],
     graphNodes: [
@@ -303,6 +386,5 @@ export const verticals = {
         graphResult: { answer: "The graph explains both the 'why now' and the fix:\n\n• WHY IT PASSED ORIGINALLY: NorthStar's prior lot NS-2308 passed cold testing (84% retention) — it PREDATES the electrolyte change. Qualification was done on the old formulation.\n• WHAT CHANGED: Engineering Change Notice ECN-NS-77 — NorthStar switched to a lower-cost electrolyte in Q3 that raises internal resistance below freezing, and did NOT re-qualify. Lot NS-2411 is the first lot built after the change → ROOT_CAUSED_BY the change.\n• CORRECTIVE ACTION: CAPA #NS-01 (open) — quarantine lot NS-2411, revert the electrolyte formulation, re-qualify at 20°F before any new PO.\n\nThe root cause isn't 'a bad battery' — it's an unqualified supplier process change. Only the graph connects the change notice to the failing lot to the reviews.", sources: 9, latency: 680, hops: 5 },
       },
     ],
-    monitor: { docsProcessed: 9500, chunksCreated: 38200, syncJobs: { ok: 21, fail: 0 }, graphAccuracy: 93, vectorAccuracy: 40, p50: 276, p99: 1210, cacheHit: 79 },
   },
 };

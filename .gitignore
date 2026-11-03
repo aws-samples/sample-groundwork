@@ -60,12 +60,12 @@ __pycache__/
 # ASH (Automated Security Helper) scan output — generated; keep config (.ash/.ash.yaml), not results
 .ash/ash_output/
 ash_output/
-# Internal demo scripts / sales enablement — local-only, not published
+# Local demo scripts — not published
 demo/
 
 # transient security-scan staging
 .sgscan/
 .sgscan-out/
 
-# local license-review artifacts for SG ticket (not shipped)
+# local license-review artifacts (not shipped)
 license-review/

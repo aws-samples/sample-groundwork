@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.log
+
+# Build-time copy of the hero-answer cache — the source of truth is
+# ../../src/data/coa-cache/. The Dockerfile/buildspec copy it in at build time
+# (see DEPLOY.md), so we don't track a duplicate here.
+coa-cache/

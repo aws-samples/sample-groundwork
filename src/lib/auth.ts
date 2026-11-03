@@ -1,45 +1,57 @@
 /**
- * Lightweight demo access gate for the hosted public deployment.
+ * Lightweight shared-password access gate.
  *
- * The local dev experience is open (no gate) — this only kicks in when
- * DEMO_USER / DEMO_PASS are configured (i.e. on App Runner). It protects the
- * shared-account COA behind a single shared credential so a leaked URL alone
- * can't drive live queries.
+ * The gate FAILS CLOSED. It is in one of three states:
+ *   - "gate":         DEMO_USER, DEMO_PASS and AUTH_SECRET are all set. Every
+ *                     protected page and API route requires a signed session.
+ *   - "bypass":       AUTH_LOCAL_BYPASS=true is set explicitly. No login is
+ *                     required. For local-only use on 127.0.0.1; never set it
+ *                     on a shared deployment.
+ *   - "unconfigured": anything else. Every protected route is refused with a
+ *                     setup message; nothing is served openly.
  *
- * Mechanism: on successful login we set an httpOnly, signed cookie. Middleware
+ * Mechanism: on successful login we set an httpOnly, signed cookie. The proxy
  * verifies the signature on every protected request. Signing uses an HMAC over
- * a fixed payload + expiry with AUTH_SECRET — no external dependency, and the
- * cookie can't be forged without the secret. This is a demo gate, not an IdP;
- * for real multi-user auth use Cognito (already in the stack).
+ * a fixed payload + expiry with AUTH_SECRET, so the cookie can't be forged
+ * without the secret. This is a basic gate, not an IdP; put your organisation's
+ * identity provider in front of any shared deployment.
  */
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 
 export const AUTH_COOKIE = "cf_session";
 const DEFAULT_TTL_MS = 12 * 60 * 60 * 1000; // 12h
 
-/** True when a gate is configured. When false, the app is open (local dev). */
-export function isGateEnabled(): boolean {
-  return Boolean(process.env.DEMO_USER && process.env.DEMO_PASS);
+export type GateState = "gate" | "bypass" | "unconfigured";
+
+const GATE_VARS = ["DEMO_USER", "DEMO_PASS", "AUTH_SECRET"] as const;
+
+/** Resolve the gate state from the environment. Defaults to "unconfigured". */
+export function gateState(): GateState {
+  if (GATE_VARS.every((k) => Boolean(process.env[k]))) return "gate";
+  // Only the exact string "true" opts in; "1", "yes", "TRUE " etc. do not.
+  if (process.env.AUTH_LOCAL_BYPASS === "true") return "bypass";
+  return "unconfigured";
 }
+
+/** Setup message for the unconfigured state. Names variables only, never values. */
+export function setupMessage(): string {
+  const missing = GATE_VARS.filter((k) => !process.env[k]);
+  return (
+    `Login gate is not configured (missing ${missing.join(", ")}). ` +
+    "Set DEMO_USER, DEMO_PASS and AUTH_SECRET in .env.local (see .env.example). " +
+    "For local-only use on 127.0.0.1 without a login, set AUTH_LOCAL_BYPASS=true instead."
+  );
+}
+
+// Per-process random key, used only in bypass (where sessions are never checked).
+const EPHEMERAL_SECRET = randomBytes(32).toString("base64url");
 
 function secret(): string {
   const s = process.env.AUTH_SECRET;
-  // Fail fast: never sign cookies with a predictable key. If the gate is
-  // enabled, AUTH_SECRET must be set to a strong random value — otherwise
-  // refuse rather than fall back to any hardcoded default.
-  if (!s) {
-    if (isGateEnabled()) {
-      throw new Error(
-        "AUTH_SECRET must be set to a strong random value when the login gate " +
-          "(DEMO_USER/DEMO_PASS) is enabled. Refusing to sign session cookies " +
-          "with a default key."
-      );
-    }
-    // Gate disabled (open local dev): no cookies are issued, so return a
-    // clearly-ephemeral per-process value rather than a shared constant.
-    return `ephemeral-${process.pid}-${Date.now()}`;
-  }
-  return s;
+  // Never sign cookies with a predictable key.
+  if (s) return s;
+  if (gateState() === "bypass") return EPHEMERAL_SECRET;
+  throw new Error("AUTH_SECRET must be set to a strong random value to sign session cookies.");
 }
 
 function sign(payload: string): string {

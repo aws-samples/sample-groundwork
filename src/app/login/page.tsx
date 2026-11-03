@@ -27,6 +27,9 @@ export default function LoginPage() {
         // client-only UI checks, then enter the console.
         localStorage.setItem("cf_auth", "1");
         router.push("/console/sources");
+      } else if (res.status === 409) {
+        // Local bypass (AUTH_LOCAL_BYPASS=true): no session is issued or needed.
+        router.push("/console/sources");
       } else {
         const data = await res.json().catch(() => ({}));
         setError(data.error || "Invalid credentials");

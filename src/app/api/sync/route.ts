@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const { vertical = "otsec", connector = "all", options = {} } = body;
 
-  const results: Record<string, any> = {};
+  const results: Record<string, unknown> = {};
   const startTime = Date.now();
 
   try {
@@ -63,8 +63,8 @@ export async function POST(request: NextRequest) {
       results,
       totals: stats,
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message, results }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message, results }, { status: 500 });
   }
 }
 

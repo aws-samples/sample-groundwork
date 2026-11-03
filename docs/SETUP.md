@@ -21,11 +21,16 @@ account; you supply your own values.
 ```bash
 npm install
 npm run db:seed        # loads the SQLite seed data (required on a fresh clone)
-npm run dev            # http://localhost:3000
+AUTH_LOCAL_BYPASS=true npm run dev   # http://127.0.0.1:3000 (local only, no login)
 ```
 
-Open http://localhost:3000. The local login accepts any email/password by
-default. This is Mode 1 — a real graph traversal over local seed data.
+Open http://127.0.0.1:3000. The dev server binds `127.0.0.1` only. This is
+Mode 1 — a real graph traversal over local seed data.
+
+The access gate fails closed: unless `AUTH_LOCAL_BYPASS=true` (local only) or all
+of `DEMO_USER`, `DEMO_PASS` and `AUTH_SECRET` are set, every page and API route
+except `/api/health` answers `503` with a setup message. Use the login gate (and
+`openssl rand -base64 32` for `AUTH_SECRET`) for anything shared.
 
 ## 2. Mode 2 — local ontology reasoning (still no AWS)
 

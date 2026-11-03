@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     const result = await provider.query(vertical, query, mode, startNodes, model);
     // `graphDb` kept as an alias of `backend` for backward-compatibility with the UI.
     return NextResponse.json({ ...result, graphDb: result.backend, fidelity: provider.fidelity });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 }

@@ -1,8 +1,47 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { Plug, CheckCircle2, Copy } from "lucide-react";
+import { Plug, CheckCircle2, Copy, FolderTree } from "lucide-react";
 import schema from "@/data/datasets/schema.json";
+import { verticals, type Vertical } from "@/data/verticals";
+import { useAppStore } from "@/lib/store";
+import { useApiJson } from "@/lib/use-api-json";
+import type { PackSchemaDetail } from "@/lib/context/pack-schema";
+
+/** How the active vertical is packaged, from GET /api/schema (the pack ontology). */
+function WorkedExample({ vertical }: { vertical: Vertical }) {
+  const name = verticals[vertical].name;
+  const { data, error, loading } = useApiJson<PackSchemaDetail>(`/api/schema?vertical=${encodeURIComponent(vertical)}`);
+  const transitive = data?.relationships.filter((r) => r.transitive).map((r) => r.id) ?? [];
+  const shared = (data?.sharedWith ?? []).map((v) => verticals[v as Vertical]?.name ?? v);
+  return (
+    <section className="rounded-xl border border-indigo-800/20 bg-indigo-950/10 p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <FolderTree className="w-4 h-4 text-indigo-300" />
+        <h2 className="text-sm font-medium text-white">Worked example: how {name} is packaged</h2>
+      </div>
+      {loading && <p className="text-xs text-zinc-500">Loading pack…</p>}
+      {error && <p className="text-xs text-zinc-500">Pack details unavailable: {error}</p>}
+      {data && (
+        <div className="space-y-2 text-xs">
+          <div className="font-mono text-zinc-300">packs/{data.pack}/</div>
+          <ul className="space-y-1 pl-4 text-zinc-400">
+            <li><code className="text-zinc-300">pack.yaml</code> — pack metadata ({data.title})</li>
+            <li>
+              <code className="text-zinc-300">ontology.ttl</code> — {data.counts.classes} classes, {data.counts.relationships} relationships
+              {transitive.length > 0 && <>, transitive: <code className="text-zinc-300">{transitive.join(", ")}</code></>}
+            </li>
+            <li><code className="text-zinc-300">metrics.osi.yaml</code> — {data.counts.metrics} governed metrics</li>
+            <li><code className="text-zinc-300">sources.yaml</code> — source registration template</li>
+          </ul>
+          {shared.length > 0 && <p className="text-zinc-500">Shared pack: also used by {shared.join(", ")}.</p>}
+          <Link href="/console/sources" className="inline-block text-indigo-400 hover:text-indigo-300">View the sources and schema for this vertical →</Link>
+        </div>
+      )}
+    </section>
+  );
+}
 
 const verticalExamples = [
   { id: "energy", label: "Energy & Utilities", description: "Outage intelligence, grid operations", color: "emerald" },
@@ -13,11 +52,12 @@ const verticalExamples = [
 ];
 
 export default function OnboardingPage() {
+  const { vertical } = useAppStore();
   const [selectedVertical, setSelectedVertical] = useState("energy");
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
-  const entityTypes = (schema.vertical_definition.example_entity_types as any)[selectedVertical === "cyber" ? "cybersecurity" : selectedVertical === "energy" ? "energy_outage" : selectedVertical] || [];
-  const relationTypes = (schema.vertical_definition.example_relation_types as any)[selectedVertical === "cyber" ? "cybersecurity" : selectedVertical === "energy" ? "energy_outage" : selectedVertical] || [];
+  const entityTypes = (schema.vertical_definition.example_entity_types as Record<string, string[] | undefined>)[selectedVertical === "cyber" ? "cybersecurity" : selectedVertical === "energy" ? "energy_outage" : selectedVertical] || [];
+  const relationTypes = (schema.vertical_definition.example_relation_types as Record<string, string[] | undefined>)[selectedVertical === "cyber" ? "cybersecurity" : selectedVertical === "energy" ? "energy_outage" : selectedVertical] || [];
 
   const copyToClipboard = (text: string, section: string) => {
     navigator.clipboard.writeText(text);
@@ -45,6 +85,8 @@ export default function OnboardingPage() {
         <h1 className="text-xl font-semibold text-white">Onboard a New Vertical</h1>
         <p className="text-sm text-zinc-400 mt-1">Provide data in the format below to launch a new knowledge graph vertical in minutes.</p>
       </div>
+
+      <WorkedExample vertical={vertical} />
 
       {/* Step 1: Choose vertical */}
       <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">

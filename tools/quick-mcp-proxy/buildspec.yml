@@ -1,0 +1,31 @@
+version: 0.2
+# Builds the amd64 quick-mcp-proxy image for App Runner and pushes to ECR
+# (runs in AWS CodeBuild — native x86, not your laptop).
+#
+# Same tooling note as the root buildspec.yml:
+#   - HERE in CodeBuild: `docker` (CodeBuild's managed amd64 environment).
+#   - LOCALLY: any OCI-compatible CLI (docker, finch, podman); see DEPLOY.md.
+#
+# Env vars this build expects (set in the CodeBuild project):
+#   AWS_DEFAULT_REGION, ECR  (ECR = <acct>.dkr.ecr.<region>.amazonaws.com)
+#
+# IMPORTANT: run this build with the proxy dir as the source root
+# (tools/quick-mcp-proxy). The pre_build step copies the hero-answer cache from
+# the repo into the build context so the Dockerfile's `COPY coa-cache` resolves.
+phases:
+  install:
+    runtime-versions:
+      nodejs: 22
+  pre_build:
+    commands:
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR
+      # Bring the hero-answer cache into the build context (Dockerfile copies ./coa-cache).
+      # Path assumes CodeBuild checked out the whole repo and set this dir as the working dir.
+      - mkdir -p coa-cache
+      - cp -f ../../src/data/coa-cache/*.json coa-cache/ 2>/dev/null || echo "no cache files found (proxy will run all-live)"
+  build:
+    commands:
+      - docker build -t $ECR/quick-mcp-proxy:latest .
+  post_build:
+    commands:
+      - docker push $ECR/quick-mcp-proxy:latest

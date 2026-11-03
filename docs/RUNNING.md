@@ -15,11 +15,17 @@ npm install
 # Seed the database with synthetic data
 npm run db:seed
 
-# Start the dev server
-npm run dev
+# Start the dev server (binds 127.0.0.1 only). Local-only, no login:
+AUTH_LOCAL_BYPASS=true npm run dev
 ```
 
-Open **http://localhost:3000**
+Open **http://127.0.0.1:3000**
+
+The access gate fails closed. Without `AUTH_LOCAL_BYPASS=true` (exactly `true`,
+local only) or all of `DEMO_USER`, `DEMO_PASS` and `AUTH_SECRET` (the login
+gate; generate the secret with `openssl rand -base64 32`), every page and API
+route except `/api/health` answers `503` with a setup message. The `curl`
+examples below assume the bypass, or add `-b cf_session=<cookie>` from a login.
 
 ---
 
@@ -27,7 +33,7 @@ Open **http://localhost:3000**
 
 | URL | Description |
 |-----|-------------|
-| http://localhost:3000/login | Login (any email/password works) |
+| http://localhost:3000/login | Login (gate mode: `DEMO_USER`/`DEMO_PASS`; not needed with the local bypass) |
 | http://localhost:3000/console/graph | Knowledge graph visualization |
 | http://localhost:3000/console/query | Vector RAG vs GraphRAG comparison |
 | http://localhost:3000/console/pipeline | Pipeline config + extraction preview |
@@ -107,6 +113,10 @@ curl -s "http://localhost:3000/api/graph?vertical=otsec&action=traverse&nodeId=v
 # Get all nodes of a specific type
 curl -s "http://localhost:3000/api/graph?vertical=otsec&action=nodes&type=ThreatGroup"
 
+# Always read the local demo seed, whatever the active mode (the Graph page uses
+# this; in Live COA the graph is virtual and is not drawn)
+curl -s "http://localhost:3000/api/graph?vertical=otsec&action=full&source=seed"
+
 # GraphRAG query
 curl -s -X POST http://localhost:3000/api/query \
   -H "Content-Type: application/json" \
@@ -143,8 +153,7 @@ curl -s -X POST http://localhost:3000/api/ingest \
 
 ```bash
 # Set up credentials
-mwinit
-# or ensure ~/.aws/credentials is configured
+aws sso login --profile <your-profile>   # or any standard AWS credential source
 
 # Ingest documents from S3
 curl -s -X POST http://localhost:3000/api/extract \
@@ -207,5 +216,5 @@ groundwork/
 | `npm run db:seed` fails | Delete `groundwork.db` and retry |
 | NVD API returns 403 | Rate limited — wait 30 seconds or add NVD_API_KEY to .env.local |
 | Extraction returns 0 entities | Text too short or no known patterns — try with CVE IDs or group names |
-| S3 connector fails | Run `mwinit` first, ensure bucket exists and region matches |
+| S3 connector fails | Refresh your AWS credentials first, ensure bucket exists and region matches |
 | Build fails on `better-sqlite3` | Run `npm approve-scripts --all` then `npm install` |

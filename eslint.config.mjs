@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Compiled output of the standalone Quick MCP proxy (gitignored).
+    "tools/quick-mcp-proxy/dist/**",
   ]),
 ]);
 

@@ -1,9 +1,19 @@
 import type { ContextProvider } from "./provider";
-import { VERTICAL_TO_PACK } from "./pack-loader";
+import { coaNamespace } from "./coa-namespace";
 import { getCoaToken, readSub } from "./coa-token";
 import { agentCoreQuery, buildAgentCoreEndpoint } from "./coa-agentcore";
 import { resolveSourceSystem } from "./source-systems";
 import { getCachedAnswer } from "./coa-cache";
+import {
+  filterRows,
+  formatResultRows,
+  isTruncated,
+  num,
+  reduceMetricRows,
+  tableCitations,
+  tablesFromSql,
+  type Row,
+} from "./coa-rows";
 import type { Citation } from "./types";
 import type {
   Vertical,
@@ -156,8 +166,6 @@ export class CoaProvider implements ContextProvider {
   private readonly baseUrl: string;
   /** Token captured at construction — a fallback if the env token is unset later. */
   private readonly initialToken?: string;
-  /** Optional per-vertical namespace override (env: COA_NAMESPACE_OTSEC, ...). */
-  private readonly namespaceOverride: Record<string, string>;
   /**
    * Query transport. "rest" (default) uses the API-Gateway REST surface — simple
    * and portable, but capped at ~29s by API Gateway. "agentcore" sends the slow
@@ -194,20 +202,14 @@ export class CoaProvider implements ContextProvider {
     this.initialToken = token;
     this.transport = process.env.COA_TRANSPORT === "agentcore" ? "agentcore" : "rest";
     this.serveRuntimeArn = process.env.COA_SERVE_RUNTIME_ARN || undefined;
-    this.namespaceOverride = {
-      otsec: process.env.COA_NAMESPACE_OTSEC ?? "",
-      energy: process.env.COA_NAMESPACE_ENERGY ?? "",
-      manufacturing: process.env.COA_NAMESPACE_MANUFACTURING ?? "",
-      cyber: process.env.COA_NAMESPACE_CYBER ?? "",
-      // Product Quality (drill root-cause) has its own COA namespace, installed
-      // with the manufacturing ontology pack. Resolved by UUID via env.
-      prodquality: process.env.COA_NAMESPACE_PRODQUALITY ?? "",
-    };
   }
 
-  /** vertical → COA namespace id. Defaults to the pack directory name. */
+  /**
+   * vertical → COA namespace id (env COA_NAMESPACE_<VERTICAL>, else the pack
+   * directory name). Shared rule: see coa-namespace.ts.
+   */
   private namespace(vertical: Vertical): string {
-    return this.namespaceOverride[vertical] || VERTICAL_TO_PACK[vertical] || vertical;
+    return coaNamespace(vertical).id;
   }
 
   async getGraph(vertical: Vertical): Promise<{ nodes: Node[]; edges: Edge[]; stats: GraphStats }> {
@@ -247,9 +249,42 @@ export class CoaProvider implements ContextProvider {
 
     if (mode === "vector") {
       // Serve KBSearch: { chunks: [{text, score, sourceId, ...}], trace }.
-      const res = await this.callTool("rag_retrieval", { namespace_id, query: question, topK: 8 });
+      // An empty result or a timeout is a normal outcome (the namespace may
+      // have no document index, or kb/search is slow), not an error. Return a
+      // neutral note so the page can say so plainly; only real failures throw.
+      const model = "COA kb/search (OpenSearch + Bedrock embeddings)";
+      const backend = "Context Ontology Accelerator";
+      const timeoutMs = Number(process.env.COA_VECTOR_TIMEOUT_MS) || 25000;
+      let res: Awaited<ReturnType<typeof this.callTool>>;
+      try {
+        res = await this.callTool("rag_retrieval", { namespace_id, query: question, topK: 8 }, { timeoutMs });
+      } catch (err) {
+        const name = (err as Error)?.name;
+        if (name !== "TimeoutError" && name !== "AbortError") throw err;
+        return {
+          mode: "vector",
+          query: question,
+          sources: 0,
+          latency: Date.now() - start,
+          model,
+          backend,
+          note: `Vector search timed out after ${Math.round(timeoutMs / 1000)}s (COA kb/search) — the answer comes from the GraphRAG path.`,
+        };
+      }
       const chunks = (res.chunks ?? []) as Array<Record<string, unknown>>;
       const { answer, citations } = formatVectorChunks(chunks);
+      let note: string | undefined;
+      if (!chunks.length) {
+        // Best-effort: say why the index is empty when the namespace has no
+        // DOCUMENTS source. Imported lazily (coa-sources imports this module's
+        // index) and bounded so it never delays the answer by more than 3 s.
+        const { listSourceTypes } = await import("@/lib/coa-sources");
+        const types = await withTimeout(listSourceTypes(vertical), 3000);
+        note =
+          types && !types.has("DOCUMENTS")
+            ? "This vertical's COA namespace has no DOCUMENTS source, so its vector index is empty — the answer comes from the GraphRAG path."
+            : "COA kb/search returned 0 matching document chunks for this question.";
+      }
       return {
         mode: "vector",
         query: question,
@@ -257,8 +292,9 @@ export class CoaProvider implements ContextProvider {
         citations: citations.length ? citations : undefined,
         sources: chunks.length,
         latency: Date.now() - start,
-        model: "COA kb/search (OpenSearch + Bedrock embeddings)",
-        backend: "Context Ontology Accelerator",
+        model,
+        backend,
+        note,
       };
     }
 
@@ -377,6 +413,20 @@ export class CoaProvider implements ContextProvider {
       };
       }
     }
+    return this.renderTieredResponse(vertical, question, startNodes, raw, start);
+  }
+
+  /**
+   * Render a COA tiered `query` response (Tier-2 rows or Tier-3 synthesis) into
+   * a QueryResult, enriched with a best-effort subgraph and citations.
+   */
+  private async renderTieredResponse(
+    vertical: Vertical,
+    question: string,
+    startNodes: string[],
+    raw: Awaited<ReturnType<CoaProvider["callTool"]>>,
+    start: number
+  ): Promise<QueryResult> {
     const res = raw.result ?? raw;
     const answer = res.synthesizedAnswer ?? res.answer;
     const tier = res.tier;
@@ -404,8 +454,35 @@ export class CoaProvider implements ContextProvider {
     // Turn the supporting chunks COA synthesized over into per-system citations
     // — the visible proof the answer was stitched across separate systems of
     // record (SAP Ariba, LIMS, Salesforce, …) rather than one document.
-    const citations = buildGraphCitations(res.supportingContent, vertical);
+    const graphCitations = buildGraphCitations(res.supportingContent, vertical);
 
+    // Tier-2 (NL→SQL over the registered source) returns `resultRows` and no
+    // synthesized prose. Render those rows rather than show an empty answer,
+    // citing the tables the governed SQL actually read.
+    const rows = Array.isArray(res.resultRows) ? (res.resultRows as Row[]) : [];
+    if (!answer && rows.length) {
+      const truncated = isTruncated(res.trace);
+      const tables = tablesFromSql(typeof res.queryUsed === "string" ? res.queryUsed : "");
+      const citations = tables.length ? tableCitations(tables, rows.length) : graphCitations;
+      return {
+        mode: "graph",
+        query: question,
+        answer: formatResultRows(rows, truncated),
+        entryNodes: entry ? [entry] : undefined,
+        subgraph,
+        hops: 4,
+        citations: citations.length ? citations : undefined,
+        sources: rows.length,
+        sourcesUnit: "rows",
+        pathDescription: `Resolved by COA Tier-2 NL→SQL over ${tables.join(" ⋈ ") || "the registered source"}${truncated ? " (row limit reached)" : ""}.`,
+        latency: Date.now() - start,
+        model: `COA tiered resolution (tier ${tier ?? "?"}${confidence != null ? `, confidence ${confidence}` : ""})`,
+        backend: "COA Tier-2 SQL over the registered source",
+        note: "Rows returned by COA Tier-2: LLM-generated SQL, authorized and firewalled by COA, executed on the live source.",
+      };
+    }
+
+    const citations = graphCitations;
     return {
       mode: "graph",
       query: question,
@@ -435,26 +512,54 @@ export class CoaProvider implements ContextProvider {
 
   async computeMetric(vertical: Vertical, name: string, args: Record<string, unknown>): Promise<MetricResult> {
     const start = Date.now();
-    // Governed metrics resolve through COA's `query` Tier-1 path (no LLM). We ask
-    // by metric name + args; COA returns the deterministic value.
-    const argStr = Object.entries(args)
-      .map(([k, v]) => `${k}=${String(v)}`)
-      .join(", ");
+    // Governed metrics resolve through COA's `query` Tier-1 path (no LLM). The
+    // deployed Tier-1 cannot bind placeholders, so metrics are stored as grouped
+    // SQL and Tier-1 returns `resultRows` (no scalar value). We filter the rows
+    // to the requested args and reduce them to one number. A newer COA that
+    // binds declared dimensions returns a scalar value, which is preferred.
+    // A Tier-1 failure throws with COA's message (unchanged contract).
+    const { rows, confidence, scalar } = await this.runTier1Metric(vertical, name);
+    const matched = filterRows(rows, args);
+    const value = scalar ?? reduceMetricRows(name, matched);
+    return {
+      name,
+      value,
+      method:
+        scalar !== undefined
+          ? `COA governed metric (Tier-1, confidence ${confidence})`
+          : `COA governed metric (Tier-1, confidence ${confidence}; ${matched.length} matching row${matched.length === 1 ? "" : "s"})`,
+      args,
+      latency: Date.now() - start,
+    };
+  }
+
+  /**
+   * Run one governed metric at COA Tier-1 and return its result rows. Sends the
+   * bare metric name pinned to Tier-1, with no args and no extra words, because
+   * the stored SQL has no placeholders and residual text bypasses Tier-1.
+   */
+  private async runTier1Metric(
+    vertical: Vertical,
+    name: string
+  ): Promise<{ metric: string; rows: Row[]; confidence: string; sql?: string; scalar?: number }> {
     const raw = await this.callTool("query", {
       namespace_id: this.namespace(vertical),
-      query: argStr ? `${name}(${argStr})` : name,
+      query: name,
       execute: true,
       tierOverride: 1, // pin to the deterministic governed-metric tier
     });
     const res = raw.result ?? raw;
-    const value = Number(res.value ?? res.metricValue ?? res.result ?? NaN);
-    const confidence = res.confidence?.score ?? res.confidence ?? "1.0";
+    if (Number(res.tier) !== 1 || !Array.isArray(res.resultRows)) {
+      throw new Error(`COA did not resolve '${name}' at Tier-1 (tier=${res.tier ?? "?"})`);
+    }
+    const scalarRaw = res.value ?? res.metricValue;
+    const scalar = scalarRaw === undefined || scalarRaw === null ? NaN : num(scalarRaw);
     return {
-      name,
-      value,
-      method: `COA governed metric (Tier-1, confidence ${confidence})`,
-      args,
-      latency: Date.now() - start,
+      metric: name,
+      rows: res.resultRows as Row[],
+      confidence: String(res.confidence?.score ?? res.confidence ?? "1.0"),
+      sql: typeof res.queryUsed === "string" ? res.queryUsed : undefined,
+      scalar: Number.isFinite(scalar) ? scalar : undefined,
     };
   }
 
@@ -537,8 +642,14 @@ export class CoaProvider implements ContextProvider {
    * This is the one method to adapt if a deployment fronts Serve differently
    * (e.g. behind the AgentCore MCP gateway instead of the REST surface).
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- parsed COA JSON; shape varies per tool and is narrowed at each call site.
-  private async callTool(tool: string, args: Record<string, unknown>): Promise<any> {
+  // `opts.timeoutMs` is an optional client-side budget for the REST fetch
+  // (kb/search can be slow); the AgentCore branch ignores it.
+  private async callTool(
+    tool: string,
+    args: Record<string, unknown>,
+    opts?: { timeoutMs?: number }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- parsed COA JSON; shape varies per tool and is narrowed at each call site.
+  ): Promise<any> {
     const { namespace_id, ...body } = args as { namespace_id?: string } & Record<string, unknown>;
     const ns = encodeURIComponent(String(namespace_id ?? ""));
 
@@ -591,6 +702,7 @@ export class CoaProvider implements ContextProvider {
 
     const init: RequestInit = { method: route.method, headers };
     if (route.method === "POST") init.body = JSON.stringify(body);
+    if (opts?.timeoutMs) init.signal = AbortSignal.timeout(opts.timeoutMs);
 
     const resp = await fetch(`${this.baseUrl}${route.path}`, init);
     if (!resp.ok) {

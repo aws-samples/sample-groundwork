@@ -63,7 +63,7 @@ export class LocalMockProvider implements ContextProvider {
         answer: `Based on ${sources} retrieved document chunks, here is relevant information about your query. [Simulated vector response — real semantic retrieval runs in Live COA mode via rag_retrieval.]`,
         sources,
         latency: 250 + Math.floor(Math.random() * 100),
-        model: "Amazon Titan Embeddings V2 → Claude Sonnet",
+        model: "Simulated vector retrieval",
         backend: "OpenSearch Serverless (simulated)",
       };
     }
@@ -106,7 +106,7 @@ export class LocalMockProvider implements ContextProvider {
       },
       hops: 4,
       latency: 700 + Math.floor(Math.random() * 400),
-      model: "Claude 4 Sonnet (Bedrock)",
+      model: "Deterministic summary (simulated, no LLM)",
       backend: "SQLite (dev)",
       note: "Mode 1 answer is a deterministic summary of the real graph traversal (no LLM). Mode 3 has COA's LLM synthesize the same subgraph into prose.",
     };
