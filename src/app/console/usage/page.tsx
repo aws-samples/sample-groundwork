@@ -1,9 +1,12 @@
 "use client";
 import { enterprise } from "@/data/enterprise";
+import { verticals } from "@/data/verticals";
+import { useAppStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
 
 export default function UsagePage() {
+  const { vertical } = useAppStore();
   const u = enterprise.usage;
   const costData = [
     { name: "OpenSearch", cost: u.costs.opensearch, fill: "#6366f1" },
@@ -24,12 +27,16 @@ export default function UsagePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-white">Usage & Billing</h1>
-          <p className="text-sm text-zinc-400 mt-0.5">{u.period} — Security Operations workspace</p>
+          <p className="text-sm text-zinc-400 mt-0.5">{u.period} — {verticals[vertical].workspaceName} workspace</p>
         </div>
         <div className="text-right">
           <div className="text-2xl font-bold text-white">${u.costs.total.toFixed(2)}</div>
           <div className="text-xs text-zinc-500">month-to-date</div>
         </div>
+      </div>
+
+      <div className="rounded-lg border border-amber-800/30 bg-amber-950/20 px-3 py-2 text-xs text-amber-200/90">
+        <span className="font-medium">Illustrative:</span> workspace billing figures on this page are demo values, not metered from AWS.
       </div>
 
       {/* Quotas */}

@@ -68,7 +68,7 @@ TOKEN="$(AWS_PROFILE="$PROFILE" AWS_DEFAULT_REGION="$REGION" aws cognito-idp ini
   --auth-parameters "USERNAME=${COA_USER},PASSWORD=${COA_PASS}" \
   --query 'AuthenticationResult.IdToken' --output text 2>/dev/null || echo "")"
 if [ -z "$TOKEN" ] || [ "$TOKEN" = "None" ]; then
-  bad "Could not mint a COA token (check AWS creds / mwinit / Isengard). Rest of Mode 3 skipped."
+  bad "Could not mint a COA token (check your AWS credentials and COA_CLIENT_ID / COA_USER / COA_PASS). Rest of Mode 3 skipped."
 else
   ok "COA token minted (fresh, ~1h)"
   H=(-H "Authorization: Bearer $TOKEN")
@@ -107,7 +107,7 @@ fi
 
 # ── App server running? ──────────────────────────────────────────────────────
 echo "${b}Dev server${x}"
-MODE_JSON="$(curl -s --max-time 5 http://localhost:3000/api/mode 2>/dev/null || echo "")"
+MODE_JSON="$(curl -s --max-time 5 http://127.0.0.1:3000/api/mode 2>/dev/null || echo "")"
 if [ -n "$MODE_JSON" ]; then
   FID="$(printf '%s' "$MODE_JSON" | python3 -c "import sys,json;print(json.load(sys.stdin).get('mode','?'))" 2>/dev/null)"
   ok "Running on :3000 (mode: $FID). Switch modes from the badge, or npm run demo:{mock,ontology,coa}"

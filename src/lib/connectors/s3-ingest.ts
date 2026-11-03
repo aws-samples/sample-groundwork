@@ -65,12 +65,12 @@ export async function ingestFromS3(options: S3IngestOptions): Promise<S3IngestRe
         if (pipelineResult.errors.length > 0) {
           result.errors.push(...pipelineResult.errors.map((e) => `${key}: ${e}`));
         }
-      } catch (err: any) {
-        result.errors.push(`Failed to process ${key}: ${err.message}`);
+      } catch (err) {
+        result.errors.push(`Failed to process ${key}: ${(err as Error).message}`);
       }
     }
-  } catch (err: any) {
-    result.errors.push(`S3 access error: ${err.message}`);
+  } catch (err) {
+    result.errors.push(`S3 access error: ${(err as Error).message}`);
   }
 
   return result;

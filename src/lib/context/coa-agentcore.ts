@@ -9,8 +9,8 @@
  * endpoint is a *different host* (not behind that API Gateway) and streams the
  * answer back over SSE, so the 29s ceiling does not apply.
  *
- * This module mirrors COA's own web-app client
- * (third_party/coa/packages/web-app/src/utils/invoke-agentcore.ts and
+ * This module mirrors the upstream Context Ontology Accelerator web-app client
+ * (packages/web-app/src/utils/invoke-agentcore.ts and
  * api-hooks/use-playground-stream.ts). It is server-side and does NOT stream to
  * the browser token-by-token; it consumes the whole SSE stream and returns the
  * terminal `done` payload, so CoaProvider.query() can treat it exactly like the

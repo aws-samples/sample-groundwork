@@ -38,8 +38,11 @@ resolve over Neptune with governed metrics and Cedar authorization.
 # ~/.aws/config
 [profile groundwork]
 region=us-west-2
-credential_process=/Users/<you>/.toolbox/bin/ada credentials print \
-  --account <YOUR_AWS_ACCOUNT_ID> --role <YOUR_ADMIN_ROLE> --provider isengard
+# Any standard credential source works, e.g. IAM Identity Center:
+#   aws configure sso --profile groundwork
+sso_session=<your-sso-session>
+sso_account_id=<YOUR_AWS_ACCOUNT_ID>
+sso_role_name=<YOUR_ADMIN_ROLE>
 ```
 
 Turn on the two Bedrock flips (no code change):
@@ -130,8 +133,9 @@ data needs manual Lake Formation wiring — see docs/RUNNING.md.)
 CONTEXT_MODE=coa
 COA_BASE_URL=https://abc123.execute-api.us-east-1.amazonaws.com/prod
 COA_TOKEN=your-oidc-or-gateway-token
-# optional namespace overrides if you didn't use the default names:
-# COA_NAMESPACE_OTSEC=otsec
+# per-vertical namespace (name or UUID); a vertical is Live-COA-capable only
+# when its variable is set (see "Per-vertical namespaces" below):
+# COA_NAMESPACE_OTSEC=<namespace-name-or-uuid>
 ```
 
 `npm run dev`. The fidelity badge now reads **Live COA**. The `CoaProvider`
@@ -154,6 +158,69 @@ which is served by the *same* API Gateway as the control plane, so one
 All wire calls go through one method, `CoaProvider.callTool()`, which holds the
 route map above. If a deployment fronts the query surface differently (e.g. only
 the AgentCore MCP gateway, no REST), that one method is the only thing to adapt.
+
+### Per-vertical namespaces (`COA_NAMESPACE_<VERTICAL>`)
+
+One rule (`src/lib/context/coa-namespace.ts`) decides which COA namespace a UI
+vertical uses, for queries, schema and sources alike:
+
+| Env var | Vertical | Fallback when unset |
+|---|---|---|
+| `COA_NAMESPACE_CYBER` | `cyber` | `ot-security` |
+| `COA_NAMESPACE_ENERGY` | `energy` | `energy-outage` |
+| `COA_NAMESPACE_OTSEC` | `otsec` | `ot-security` |
+| `COA_NAMESPACE_PRODQUALITY` | `prodquality` | `manufacturing` |
+
+The value can be the namespace name or its UUID (the `sources` endpoint needs
+the UUID, see below). `COA_NAMESPACE_MANUFACTURING` is still honoured for the
+`manufacturing` id.
+
+A vertical counts as **Live-COA-capable only when its variable is set**.
+`GET /api/mode` returns `coaVerticals`, the list of those vertical ids (never
+the namespace values). The Query and Sources pages use it: an unset vertical
+gets a "Live COA not configured" note and the app makes no COA call for it.
+Queries for an unset vertical still resolve against the pack-name fallback, as
+before.
+
+### Read-only console routes: `GET /api/schema` and `GET /api/sources`
+
+Both are GET-only (no POST/PUT/DELETE, so `405` for anything else), accept only
+the vertical ids in `src/data/verticals.ts` (`400` otherwise) and sit behind the
+same login gate as every other route.
+
+- `GET /api/schema?vertical=<id>`: the pack ontology parsed from
+  `packs/<pack>/ontology.ttl` (title, classes with parent/summary/datatype
+  properties, relationships with transitive/inferred tags, governed metric
+  names, counts, and `sharedWith` for verticals on the same pack). In Live COA
+  mode, for a configured vertical only, it adds `liveCheck`: COA
+  `describe_schema` raced against 8 s, with classes de-duplicated and split into
+  pack classes present/missing, governed-metric classes (`GovernedMetric` and
+  its subclasses) and other classes. A timeout or failure gives
+  `{ ok: false, error }` (first line only).
+- `GET /api/sources?vertical=<id>[&refresh=1]`:
+  - Live COA, configured: `origin: "coa-live"`. Read-only COA GETs
+    (`/namespaces/{ns}/sources`, `/sources/{id}`, `/sources/{id}/tables`, the
+    last skipped for DOCUMENTS sources), 15 s timeout per call, cached 60 s per
+    vertical (`refresh=1` bypasses the cache). COA errors return `502` with the
+    namespace masked as `{ns}` and a hint on 401/403.
+  - Live COA, not configured: `origin: "coa-not-configured"` with `envVar`, no
+    COA call.
+  - Demo data / Local ontology: `origin: "demo-seed"`. Groups
+    `src/data/datasets/<id>/documents.json` by `source` (docs, chunks, latest
+    ingested UTC), seed node/edge counts, the pack `sources.yaml` declared
+    count, and the latest seed ingestion events.
+
+Fields that are **never returned** by `/api/sources`: the credential secret
+ARN, the full JDBC host (only its first label, as `rdsInstance`), DOCUMENTS
+`s3Prefixes`, and the namespace id (the response reports the pack name and
+`namespaceConfigured`).
+
+### Tier-1 governed metrics and dimensions
+
+The deployed COA Tier-1 path does not support `declared_dimensions` yet, so a
+metric query returns grouped `result.resultRows` rather than one scalar
+`value`. The client filters those rows by the requested arguments and reduces
+them. When a newer COA returns a scalar `value`, that path takes over.
 
 ### Query transport: REST (default) vs AgentCore SSE (no 29s cap)
 
@@ -289,14 +356,13 @@ node_modules/.bin/cdk bootstrap aws://<YOUR_AWS_ACCOUNT_ID>/us-east-1
 ### SMUS / DataZone admin principal
 
 Set `SCL_SMUS_ADMIN_ARNS` explicitly to the IAM role(s) humans federate into —
-here the Isengard `*_admin` roles:
+the IAM role(s) your operators federate into:
 
 ```bash
 export SCL_SMUS_ADMIN_ARNS=arn:aws:iam::<YOUR_AWS_ACCOUNT_ID>:role/<YOUR_ADMIN_ROLE>
 ```
 
-If unset, `deploy.sh` falls back to an IAM role literally named `Admin` (an
-Isengard-account convention). The fallback deploys, but only that role can admin
+If unset, `deploy.sh` falls back to an IAM role literally named `Admin`. The fallback deploys, but only that role can admin
 the DataZone/SMUS portal — set the ARNs so the real operators can.
 
 ### Clean stray synth output before deploy
@@ -332,17 +398,17 @@ secret, so you can mint a token headlessly:
 ```bash
 # one-time: a user in the pool, with a permanent password, in the Admin group
 aws cognito-idp admin-create-user --user-pool-id <YOUR_COGNITO_USER_POOL_ID> \
-  --username you@amazon.com --message-action SUPPRESS \
-  --user-attributes Name=email,Value=you@amazon.com Name=email_verified,Value=true
+  --username you@example.com --message-action SUPPRESS \
+  --user-attributes Name=email,Value=you@example.com Name=email_verified,Value=true
 aws cognito-idp admin-set-user-password --user-pool-id <YOUR_COGNITO_USER_POOL_ID> \
-  --username you@amazon.com --password '<no-shell-special-chars>' --permanent
+  --username you@example.com --password '<no-shell-special-chars>' --permanent
 aws cognito-idp admin-add-user-to-group --user-pool-id <YOUR_COGNITO_USER_POOL_ID> \
-  --username you@amazon.com --group-name Admin      # REQUIRED — see below
+  --username you@example.com --group-name Admin      # REQUIRED — see below
 
 # mint (repeat when the ~1h token expires)
 aws cognito-idp initiate-auth --auth-flow USER_PASSWORD_AUTH \
   --client-id <YOUR_COGNITO_CLIENT_ID> \
-  --auth-parameters USERNAME=you@amazon.com,PASSWORD='<pw>' \
+  --auth-parameters USERNAME=you@example.com,PASSWORD='<pw>' \
   --query AuthenticationResult.IdToken --output text
 ```
 

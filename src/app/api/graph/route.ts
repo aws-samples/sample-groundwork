@@ -1,15 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getProvider, type Vertical } from "@/lib/context";
+import { getProvider, getSeedProvider, type Vertical } from "@/lib/context";
+import { verticals } from "@/data/verticals";
 
+const ALLOWED = Object.keys(verticals);
+
+/**
+ * GET /api/graph?vertical=<id>&action=full|stats|nodes|node|traverse[&source=seed]
+ * Read-only. `source=seed` always reads the local demo seed (SQLite), whatever
+ * the active mode; without it the active provider answers.
+ */
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const vertical = (searchParams.get("vertical") || "otsec") as Vertical;
+  if (!ALLOWED.includes(vertical)) {
+    return NextResponse.json({ error: `Unsupported vertical. Allowed: ${ALLOWED.join(", ")}.` }, { status: 400 });
+  }
   const action = searchParams.get("action") || "full";
   const nodeType = searchParams.get("type") || undefined;
   const nodeId = searchParams.get("nodeId") || undefined;
   const hops = parseInt(searchParams.get("hops") || "3");
 
-  const provider = getProvider();
+  const provider = searchParams.get("source") === "seed" ? getSeedProvider() : getProvider();
 
   try {
     switch (action) {
@@ -41,7 +52,9 @@ export async function GET(request: NextRequest) {
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
     }
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    // Upstream (COA) errors can carry response bodies; keep them in the server log only.
+    console.error("GET /api/graph failed:", (error as Error).message);
+    return NextResponse.json({ error: "Could not load the graph for this vertical." }, { status: 500 });
   }
 }

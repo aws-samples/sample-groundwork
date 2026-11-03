@@ -1,108 +1,142 @@
 "use client";
 import { useAppStore } from "@/lib/store";
 import { verticals, type Vertical } from "@/data/verticals";
+import { useFidelity } from "@/lib/use-fidelity";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ComponentType, MutableRefObject } from "react";
+import type { ForceGraphMethods, ForceGraphProps, NodeObject, LinkObject } from "react-force-graph-2d";
 import { Search, RotateCcw } from "lucide-react";
 import { AwsLogo } from "@/components/aws-logo";
 
-const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false });
+interface GNode {
+  id: string;
+  label: string;
+  type: string;
+  color: string;
+  connections: number;
+}
+interface GLink {
+  source: string;
+  target: string;
+  label?: string;
+}
+type GraphOrigin = "seed" | "config";
+interface LoadedGraph {
+  vertical: Vertical;
+  origin: GraphOrigin;
+  nodes: GNode[];
+  links: GLink[];
+}
+/** Shape of GET /api/graph?action=full (edges carry source_id/target_id; tolerate source/target too). */
+interface ApiGraph {
+  nodes?: { id: string; label?: string; type?: string }[];
+  edges?: { source_id?: string; target_id?: string; source?: string; target?: string; relation?: string }[];
+}
+type FgNode = NodeObject<GNode>;
+type FgLink = LinkObject<GNode, GLink>;
+type FgRef = ForceGraphMethods<FgNode, FgLink>;
 
-const cyberColors: Record<string, string> = {
-  ThreatActor: "#ef4444", CVE: "#f59e0b", Technique: "#8b5cf6", Malware: "#ec4899", Campaign: "#06b6d4", Asset: "#10b981", Indicator: "#6366f1",
-};
-const energyColors: Record<string, string> = {
-  Outage: "#ef4444", Asset: "#10b981", Crew: "#3b82f6", Obstacle: "#f59e0b", Feeder: "#06b6d4", Customer: "#a855f7", RootCause: "#ec4899",
-};
-const otsecColors: Record<string, string> = {
-  ThreatGroup: "#ef4444", Vulnerability: "#f59e0b", ICSTechnique: "#8b5cf6", Malware: "#ec4899", OTAsset: "#10b981", PurdueZone: "#06b6d4", Compliance: "#3b82f6",
-};
-const prodqualityColors: Record<string, string> = {
-  Product: "#f59e0b", ReviewCluster: "#ef4444", Region: "#06b6d4", Store: "#3b82f6", Return: "#ec4899", Component: "#10b981", ComponentLot: "#a855f7", Supplier: "#8b5cf6", PurchaseOrder: "#eab308", SupplierScorecard: "#14b8a6", RootCause: "#f43f5e", CorrectiveAction: "#22c55e",
-};
+// next/dynamic drops the component's generics, so re-apply them for our node type.
+const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false }) as unknown as ComponentType<
+  ForceGraphProps<FgNode, FgLink> & { ref?: MutableRefObject<FgRef | undefined> }
+>;
 
-function colorsFor(vertical: Vertical): Record<string, string> {
-  return vertical === "cyber" ? cyberColors : vertical === "energy" ? energyColors : vertical === "otsec" ? otsecColors : prodqualityColors;
+// Fallback colours for any entity type missing from verticals[v].graphColors.
+const PALETTE = ["#6366f1", "#ef4444", "#10b981", "#f59e0b", "#06b6d4", "#ec4899", "#8b5cf6", "#3b82f6", "#a855f7", "#14b8a6", "#eab308", "#f43f5e"];
+
+function hash(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
 }
 
-// Generate a denser graph with more nodes for a richer visualization
-function generateDenseGraph(vertical: Vertical) {
-  const types = vertical === "cyber"
-    ? [{ type: "ThreatActor", count: 18 }, { type: "CVE", count: 45 }, { type: "Technique", count: 38 }, { type: "Malware", count: 14 }, { type: "Campaign", count: 12 }, { type: "Asset", count: 35 }, { type: "Indicator", count: 22 }]
-    : vertical === "energy"
-    ? [{ type: "Outage", count: 24 }, { type: "Asset", count: 52 }, { type: "Crew", count: 16 }, { type: "Obstacle", count: 20 }, { type: "Feeder", count: 32 }, { type: "Customer", count: 28 }, { type: "RootCause", count: 18 }]
-    : vertical === "prodquality"
-    ? [{ type: "Product", count: 8 }, { type: "ReviewCluster", count: 16 }, { type: "Region", count: 6 }, { type: "Store", count: 30 }, { type: "Return", count: 22 }, { type: "Component", count: 24 }, { type: "ComponentLot", count: 18 }, { type: "Supplier", count: 12 }, { type: "PurchaseOrder", count: 26 }]
-    : [{ type: "ThreatGroup", count: 12 }, { type: "Vulnerability", count: 38 }, { type: "ICSTechnique", count: 28 }, { type: "Malware", count: 10 }, { type: "OTAsset", count: 48 }, { type: "PurdueZone", count: 6 }, { type: "Compliance", count: 14 }];
+function colorFor(vertical: Vertical, type: string): string {
+  const cfg = verticals[vertical];
+  const mapped = (cfg.graphColors as Record<string, string>)[type];
+  if (mapped) return mapped;
+  const idx = (cfg.entityTypes as readonly string[]).indexOf(type);
+  return PALETTE[(idx >= 0 ? idx : hash(type)) % PALETTE.length];
+}
 
-  const colors = colorsFor(vertical);
-  const nodes: { id: string; label: string; type: string; color: string; connections: number }[] = [];
-  const links: { source: string; target: string }[] = [];
-
-  // Key named nodes (high connectivity)
-  const namedNodes = vertical === "cyber"
-    ? [{ id: "apt29", label: "Midnight Blizzard", type: "ThreatActor" }, { id: "vt", label: "Volt Typhoon", type: "ThreatActor" }, { id: "sc", label: "Scattered Spider", type: "ThreatActor" }, { id: "cve-log4j", label: "CVE-2021-44228", type: "CVE" }, { id: "cve-solar", label: "CVE-2020-10148", type: "CVE" }, { id: "sunburst", label: "SUNBURST", type: "Malware" }, { id: "cobalt", label: "CobaltStrike", type: "Malware" }, { id: "solar-camp", label: "SolarWinds Campaign", type: "Campaign" }, { id: "log4j-camp", label: "Log4Shell Campaign", type: "Campaign" }]
-    : vertical === "energy"
-    ? [{ id: "outage-4471", label: "Outage OE-4471", type: "Outage" }, { id: "tx447", label: "TX-447 Transformer", type: "Asset" }, { id: "crew-alpha", label: "Crew Alpha-7", type: "Crew" }, { id: "veg-rd12", label: "Vegetation Rd-12", type: "Obstacle" }, { id: "feeder-2201", label: "Feeder F-2201", type: "Feeder" }, { id: "cust-zone-a", label: "Zone A (2,400 homes)", type: "Customer" }, { id: "overload", label: "Thermal Overload", type: "RootCause" }, { id: "sub-east", label: "Eastview Substation", type: "Asset" }, { id: "storm-july", label: "Storm Jul-28", type: "RootCause" }]
-    : vertical === "prodquality"
-    ? [{ id: "drill-vc20", label: "VoltCore 20V Drill", type: "Product" }, { id: "rev-cluster-cold", label: "Reviews: dies in cold", type: "ReviewCluster" }, { id: "region-north", label: "Cold-Climate Region", type: "Region" }, { id: "store-lowes-mn", label: "Lowe's MN", type: "Store" }, { id: "return-batch-winter", label: "Winter Return Batch", type: "Return" }, { id: "battery-pack", label: "20V Battery Pack", type: "Component" }, { id: "cell-lot-ns", label: "Cell Lot NS-2411", type: "ComponentLot" }, { id: "supplier-northstar", label: "NorthStar Cells", type: "Supplier" }, { id: "po-ns-4411", label: "PO #NS-4411", type: "PurchaseOrder" }]
-    : [{ id: "voltzite", label: "VOLTZITE", type: "ThreatGroup" }, { id: "electrum", label: "ELECTRUM", type: "ThreatGroup" }, { id: "chernovite", label: "CHERNOVITE", type: "ThreatGroup" }, { id: "vpn-gw", label: "VPN Gateway", type: "OTAsset" }, { id: "scada-srv", label: "SCADA Server", type: "OTAsset" }, { id: "plc-sub1", label: "PLC-SUB1", type: "OTAsset" }, { id: "pipedream", label: "PIPEDREAM", type: "Malware" }, { id: "cve-3400", label: "CVE-2024-3400", type: "Vulnerability" }, { id: "zone-dmz", label: "IT/OT DMZ", type: "PurdueZone" }];
-
-  namedNodes.forEach((n) => nodes.push({ ...n, color: colors[n.type], connections: 0 }));
-
-  // Generate anonymous nodes
-  let nodeId = 0;
-  types.forEach(({ type, count }) => {
-    const existing = nodes.filter((n) => n.type === type).length;
-    for (let i = 0; i < count - existing; i++) {
-      nodes.push({ id: `${type}-${nodeId++}`, label: "", type, color: colors[type], connections: 0 });
-    }
-  });
-
-  // Generate links - connect named nodes heavily, others sparsely
-  const namedIds = namedNodes.map((n) => n.id);
-  nodes.forEach((node) => {
-    if (namedIds.includes(node.id)) return;
-    // Connect each node to 1-3 random nodes, preferring named nodes
-    const numLinks = 1 + Math.floor(Math.random() * 2.5);
-    for (let i = 0; i < numLinks; i++) {
-      const target = Math.random() < 0.4
-        ? namedIds[Math.floor(Math.random() * namedIds.length)]
-        : nodes[Math.floor(Math.random() * nodes.length)].id;
-      if (target !== node.id) links.push({ source: node.id, target });
-    }
-  });
-
-  // Connect named nodes to each other
-  for (let i = 0; i < namedIds.length; i++) {
-    for (let j = i + 1; j < namedIds.length; j++) {
-      if (Math.random() < 0.35) links.push({ source: namedIds[i], target: namedIds[j] });
-    }
+function build(vertical: Vertical, origin: GraphOrigin, rawNodes: { id: string; label: string; type: string }[], rawLinks: GLink[]): LoadedGraph {
+  const ids = new Set(rawNodes.map((n) => n.id));
+  const links = rawLinks.filter((l) => ids.has(l.source) && ids.has(l.target));
+  const degree = new Map<string, number>();
+  for (const l of links) {
+    degree.set(l.source, (degree.get(l.source) ?? 0) + 1);
+    degree.set(l.target, (degree.get(l.target) ?? 0) + 1);
   }
-
-  // Count connections
-  links.forEach((l) => {
-    const s = nodes.find((n) => n.id === l.source);
-    const t = nodes.find((n) => n.id === l.target);
-    if (s) s.connections++;
-    if (t) t.connections++;
-  });
-
-  return { nodes, links };
+  const nodes = rawNodes.map((n) => ({ ...n, color: colorFor(vertical, n.type), connections: degree.get(n.id) ?? 0 }));
+  return { vertical, origin, nodes, links };
 }
+
+/** The vertical's config graph slice (verticals.ts), used when the seed graph is unavailable. */
+function configSlice(vertical: Vertical): LoadedGraph {
+  const cfg = verticals[vertical];
+  return build(
+    vertical,
+    "config",
+    cfg.graphNodes.map((n) => ({ id: n.id, label: n.label, type: n.type })),
+    cfg.graphLinks.map((l) => ({ source: l.source, target: l.target, label: l.label }))
+  );
+}
+
+const BADGE: Record<string, string> = {
+  mock: "Local SQLite seed",
+  ontology: "Local seed + OWL pack",
+  coa: "Neptune via COA · virtual graph",
+};
 
 export default function GraphPage() {
   const { vertical } = useAppStore();
   const data = verticals[vertical];
-  const fgRef = useRef<any>(null);
+  const fidelity = useFidelity();
+  const fgRef = useRef<FgRef | undefined>(undefined);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const fittedFor = useRef<LoadedGraph | null>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
   const [searchTerm, setSearchTerm] = useState("");
-  const colors = colorsFor(vertical);
+  const [loaded, setLoaded] = useState<LoadedGraph | null>(null);
 
-  const [graphData, setGraphData] = useState<{ nodes: any[]; links: any[] }>({ nodes: [], links: [] });
-
+  // Seed graph from local SQLite in every mode (`source=seed`): the Live COA
+  // graph is virtual and is not drawn here. An unseeded DB errors or returns no
+  // nodes; both fall back to the config slice.
   useEffect(() => {
-    setGraphData(generateDenseGraph(vertical));
+    let cancelled = false;
+    fetch(`/api/graph?vertical=${encodeURIComponent(vertical)}&action=full&source=seed`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((body: ApiGraph) => {
+        const nodes = (body.nodes ?? []).map((n) => ({ id: String(n.id), label: n.label ?? "", type: n.type ?? "Entity" }));
+        const links = (body.edges ?? []).map((e) => ({
+          source: String(e.source_id ?? e.source ?? ""),
+          target: String(e.target_id ?? e.target ?? ""),
+          label: e.relation,
+        }));
+        if (!cancelled) setLoaded(nodes.length > 0 ? build(vertical, "seed", nodes, links) : configSlice(vertical));
+      })
+      .catch(() => {
+        if (!cancelled) setLoaded(configSlice(vertical));
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [vertical]);
+
+  // Size the canvas to its container (not the window) so the graph is centred.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setSize({ width: Math.floor(width), height: Math.floor(height) });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const graph = loaded?.vertical === vertical ? loaded : null;
+  const graphData = useMemo(() => ({ nodes: graph?.nodes ?? [], links: graph?.links ?? [] }), [graph]);
 
   // Entity type counts
   const typeCounts = useMemo(() => {
@@ -117,19 +151,21 @@ export default function GraphPage() {
     return new Set(graphData.nodes.filter((n) => n.label.toLowerCase().includes(term) || n.type.toLowerCase().includes(term)).map((n) => n.id));
   }, [searchTerm, graphData]);
 
-  const paintNode = useCallback((node: any, ctx: CanvasRenderingContext2D) => {
+  const paintNode = useCallback((node: FgNode, ctx: CanvasRenderingContext2D) => {
+    const x = node.x ?? 0;
+    const y = node.y ?? 0;
     const size = Math.max(3, Math.min(12, 3 + node.connections * 0.8));
     const highlighted = highlightNodes.size > 0 && highlightNodes.has(node.id);
     const dimmed = highlightNodes.size > 0 && !highlightNodes.has(node.id);
 
     ctx.beginPath();
-    ctx.arc(node.x, node.y, size, 0, 2 * Math.PI);
+    ctx.arc(x, y, size, 0, 2 * Math.PI);
     ctx.fillStyle = dimmed ? "rgba(63,63,70,0.3)" : node.color;
     ctx.fill();
 
     if (highlighted) {
       ctx.beginPath();
-      ctx.arc(node.x, node.y, size + 3, 0, 2 * Math.PI);
+      ctx.arc(x, y, size + 3, 0, 2 * Math.PI);
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 1.5;
       ctx.stroke();
@@ -140,19 +176,41 @@ export default function GraphPage() {
       ctx.font = `${Math.max(3.5, Math.min(5, 3 + node.connections * 0.2))}px Inter, sans-serif`;
       ctx.fillStyle = dimmed ? "rgba(161,161,170,0.2)" : "#e4e4e7";
       ctx.textAlign = "center";
-      ctx.fillText(node.label, node.x, node.y + size + 5);
+      ctx.fillText(node.label, x, y + size + 5);
     }
   }, [highlightNodes]);
+
+  const paintPointer = useCallback((node: FgNode, color: string, ctx: CanvasRenderingContext2D) => {
+    ctx.beginPath();
+    ctx.arc(node.x ?? 0, node.y ?? 0, 8, 0, 2 * Math.PI);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }, []);
+
+  // Fit once per data load, after the layout settles.
+  const onEngineStop = useCallback(() => {
+    if (graph && fittedFor.current !== graph) {
+      fittedFor.current = graph;
+      fgRef.current?.zoomToFit(400, 40);
+    }
+  }, [graph]);
+
+  const originLabel = graph?.origin === "config" ? "config slice" : "demo seed graph (local SQLite)";
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-white">Knowledge Graph</h1>
-          <p className="text-sm text-zinc-400 mt-0.5">{data.name} — {graphData.nodes.length} entities, {graphData.links.length} relationships</p>
+          <p className="text-sm text-zinc-400 mt-0.5">
+            {graph ? `${data.name} — ${graphData.nodes.length} entities, ${graphData.links.length} relationships — ${originLabel}` : `${data.name} — loading graph…`}
+          </p>
+          {fidelity === "coa" && (
+            <p className="text-xs text-zinc-500 mt-1">The live COA graph is virtual (mapped over registered sources) and is not drawn here; this view shows the local demo seed.</p>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => fgRef.current?.zoomToFit(400)} className="p-2 rounded-lg border border-white/[0.08] hover:bg-white/[0.04] text-zinc-400 transition-colors">
+          <button onClick={() => fgRef.current?.zoomToFit(400, 40)} aria-label="Fit graph to view" className="p-2 rounded-lg border border-white/[0.08] hover:bg-white/[0.04] text-zinc-400 transition-colors">
             <RotateCcw className="w-4 h-4" />
           </button>
         </div>
@@ -171,34 +229,41 @@ export default function GraphPage() {
         <div className="absolute bottom-4 left-4 z-10 bg-[#0c0c12]/90 backdrop-blur-sm rounded-lg border border-white/[0.08] p-3 space-y-1.5">
           {typeCounts.map(([type, count]) => (
             <div key={type} className="flex items-center gap-2 text-xs">
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[type] }} />
+              <div data-legend-dot className="w-3 h-3 rounded-full" style={{ backgroundColor: colorFor(vertical, type) }} />
               <span className="text-zinc-300 w-24">{type}</span>
               <span className="text-zinc-500">{count}</span>
             </div>
           ))}
         </div>
 
-        {/* AWS Neptune badge */}
-        <div className="absolute top-3 right-3 z-10 flex items-center gap-2 px-3 py-2 rounded-lg bg-[#232f3e] border border-white/[0.1]">
-          <AwsLogo className="h-3.5" />
-          <span className="text-[10px] text-zinc-300">Neptune Analytics</span>
-        </div>
+        {/* Backend badge, by mode */}
+        {fidelity && (
+          <div className="absolute top-3 right-3 z-10 flex items-center gap-2 px-3 py-2 rounded-lg bg-[#232f3e] border border-white/[0.1]">
+            {fidelity === "coa" && <AwsLogo className="h-3.5" />}
+            <span className="text-[10px] text-zinc-300">{BADGE[fidelity] ?? BADGE.mock}</span>
+          </div>
+        )}
 
-        <div className="h-[550px] md:h-[620px]">
-          <ForceGraph2D
-            ref={fgRef}
-            graphData={graphData}
-            nodeCanvasObject={paintNode}
-            nodePointerAreaPaint={(node: any, color, ctx) => { ctx.beginPath(); ctx.arc(node.x, node.y, 8, 0, 2 * Math.PI); ctx.fillStyle = color; ctx.fill(); }}
-            linkColor={() => "rgba(161,161,170,0.35)"}
-            linkWidth={1}
-            linkDirectionalParticles={0}
-            d3AlphaDecay={0.02}
-            d3VelocityDecay={0.3}
-            warmupTicks={50}
-            cooldownTime={3000}
-            backgroundColor="#0c0c12"
-          />
+        <div ref={containerRef} data-graph-container className="h-[550px] md:h-[620px]">
+          {graph && size.width > 0 && size.height > 0 && (
+            <ForceGraph2D
+              ref={fgRef}
+              width={size.width}
+              height={size.height}
+              graphData={graphData}
+              nodeCanvasObject={paintNode}
+              nodePointerAreaPaint={paintPointer}
+              linkColor={() => "rgba(161,161,170,0.35)"}
+              linkWidth={1}
+              linkDirectionalParticles={0}
+              d3AlphaDecay={0.02}
+              d3VelocityDecay={0.3}
+              warmupTicks={50}
+              cooldownTime={3000}
+              onEngineStop={onEngineStop}
+              backgroundColor="#0c0c12"
+            />
+          )}
         </div>
       </div>
     </div>

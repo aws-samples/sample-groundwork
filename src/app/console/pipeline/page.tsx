@@ -2,22 +2,43 @@
 import { useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { verticals } from "@/data/verticals";
+import { useFidelity } from "@/lib/use-fidelity";
 import { cn } from "@/lib/utils";
-import { Sparkles } from "lucide-react";
+import { Info, Sparkles } from "lucide-react";
+
+type VerticalConfig = (typeof verticals)[keyof typeof verticals];
+
+/**
+ * Extraction preview built from the vertical's own seed entities: the first 4
+ * config graph nodes and up to 4 links among them (widened to the first 6
+ * nodes when fewer than 2 links qualify).
+ */
+function buildPreview(data: VerticalConfig) {
+  const pick = (n: number) => {
+    const nodes = data.graphNodes.slice(0, n);
+    const ids = new Set(nodes.map((x) => x.id));
+    const links = data.graphLinks.filter((l) => ids.has(l.source) && ids.has(l.target)).slice(0, 4);
+    return { nodes, links };
+  };
+  let { nodes, links } = pick(4);
+  if (links.length < 2) ({ nodes, links } = pick(6));
+  const labelOf = new Map(nodes.map((x) => [x.id, x.label]));
+  return {
+    entities: nodes.map((x) => ({ name: x.label, type: x.type })),
+    relations: links.map((l) => ({ s: labelOf.get(l.source) ?? l.source, r: l.label, t: labelOf.get(l.target) ?? l.target })),
+  };
+}
 
 export default function PipelinePage() {
   const { vertical } = useAppStore();
   const data = verticals[vertical];
+  const fidelity = useFidelity();
   const [chunking, setChunking] = useState("semantic");
   const [embedding, setEmbedding] = useState("titan-1024");
   const [graphModel, setGraphModel] = useState("sonnet");
   const [showPreview, setShowPreview] = useState(false);
 
-  const previewData = vertical === "cyber"
-    ? { entities: [{ name: "APT29", type: "ThreatActor" }, { name: "CVE-2020-10148", type: "CVE" }, { name: "T1195.002", type: "Technique" }, { name: "SUNBURST", type: "Malware" }], relations: [{ s: "APT29", r: "DEPLOYS_MALWARE", t: "SUNBURST" }, { s: "APT29", r: "EXPLOITS", t: "CVE-2020-10148" }, { s: "APT29", r: "USES_TECHNIQUE", t: "T1195.002" }] }
-    : vertical === "energy"
-    ? { entities: [{ name: "Outage OE-4471", type: "Outage" }, { name: "TX-447", type: "Asset" }, { name: "Thermal Overload", type: "RootCause" }, { name: "Crew Alpha-7", type: "Crew" }], relations: [{ s: "Outage OE-4471", r: "CAUSED_BY", t: "Thermal Overload" }, { s: "Thermal Overload", r: "AFFECTS", t: "TX-447" }, { s: "Outage OE-4471", r: "ASSIGNED_TO", t: "Crew Alpha-7" }] }
-    : { entities: [{ name: "VOLTZITE", type: "ThreatGroup" }, { name: "CVE-2024-3400", type: "Vulnerability" }, { name: "VPN Gateway (PAN-OS)", type: "OTAsset" }, { name: "T0866: Exploit Remote Svc", type: "ICSTechnique" }], relations: [{ s: "VOLTZITE", r: "EXPLOITS", t: "CVE-2024-3400" }, { s: "CVE-2024-3400", r: "AFFECTS_ASSET", t: "VPN Gateway (PAN-OS)" }, { s: "VOLTZITE", r: "USES_TECHNIQUE", t: "T0866: Exploit Remote Svc" }] };
+  const previewData = buildPreview(data);
 
   return (
     <div className="space-y-6">
@@ -25,6 +46,16 @@ export default function PipelinePage() {
         <h1 className="text-xl font-semibold text-white">Pipeline Configurator</h1>
         <p className="text-sm text-zinc-400 mt-0.5">{data.name} — ingestion pipeline settings</p>
       </div>
+      {fidelity && (
+        <div className="flex items-start gap-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5 text-xs text-zinc-400">
+          <Info className="w-4 h-4 text-zinc-500 shrink-0 mt-0.5" />
+          <span>
+            {fidelity === "coa"
+              ? "Live COA: structured sources are mapped through the pack ontology as a virtual graph (nothing to re-sync); DOCUMENTS sources are chunked and embedded by COA for vector search."
+              : `Preview only: this console does not run ingestion. The Demo graph is the local seed (src/data/datasets/${vertical}/).`}
+          </span>
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <PipelineCard title="Chunking Strategy">
           {[["fixed", "Fixed", "512 tokens, 64 overlap"], ["semantic", "Semantic", "95th pctile breakpoint"], ["hierarchical", "Hierarchical", "Parent: 1024, Child: 256"], ["custom", "Custom Lambda", "Upload handler.zip"]].map(([v, l, d]) => (
@@ -53,7 +84,7 @@ export default function PipelinePage() {
             <button onClick={() => setShowPreview(true)} className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-lg text-sm font-medium shadow-lg shadow-indigo-900/20 transition-all">
               <Sparkles className="w-3.5 h-3.5" /> Preview Extraction
             </button>
-            <button className="w-full px-3 py-2 border border-white/[0.08] text-zinc-300 hover:bg-white/[0.04] rounded-lg text-sm transition-colors">Apply & Re-sync</button>
+            <button disabled title="Preview only: these settings are not applied. Ingestion runs in COA, not in this console." className="w-full px-3 py-2 border border-white/[0.08] text-zinc-500 rounded-lg text-sm cursor-not-allowed opacity-60">Apply & Re-sync</button>
           </div>
         </PipelineCard>
       </div>
@@ -61,7 +92,7 @@ export default function PipelinePage() {
         <div className="rounded-xl border border-emerald-800/30 bg-emerald-950/10 p-5">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles className="w-4 h-4 text-emerald-400" />
-            <span className="text-sm font-medium text-emerald-300">Extraction Preview (1 chunk sample)</span>
+            <span className="text-sm font-medium text-emerald-300">Extraction preview (from the vertical&apos;s seed entities)</span>
           </div>
           <pre className="text-xs text-zinc-300 bg-black/30 p-4 rounded-lg overflow-x-auto border border-white/[0.04]">{JSON.stringify(previewData, null, 2)}</pre>
         </div>

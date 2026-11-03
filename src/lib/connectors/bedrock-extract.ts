@@ -81,8 +81,8 @@ Return ONLY valid JSON in this exact format:
 }`;
 
 export interface ExtractionResult {
-  entities: Array<{ id: string; label: string; type: string; properties: Record<string, any> }>;
-  relationships: Array<{ source: string; target: string; relation: string; properties: Record<string, any> }>;
+  entities: Array<{ id: string; label: string; type: string; properties: Record<string, unknown> }>;
+  relationships: Array<{ source: string; target: string; relation: string; properties: Record<string, unknown> }>;
   model_used: string;
   tokens_used?: number;
 }
@@ -136,9 +136,9 @@ export async function extractWithBedrock(text: string, vertical: string): Promis
       model_used: modelId,
       tokens_used: result.usage?.output_tokens,
     };
-  } catch (error: any) {
+  } catch (error) {
     // If Bedrock fails (no credentials, wrong region, etc.), fall back to local extraction
-    console.warn(`Bedrock extraction failed (${error.message}), using local fallback`);
+    console.warn(`Bedrock extraction failed (${(error as Error).message}), using local fallback`);
     return extractLocal(text, vertical);
   }
 }
@@ -257,16 +257,16 @@ export async function runExtractionPipeline(
         result.model_used = extraction.model_used;
         allEntities.push(...extraction.entities);
         allRelationships.push(...extraction.relationships);
-      } catch (err: any) {
-        result.errors.push(`Chunk extraction error: ${err.message}`);
+      } catch (err) {
+        result.errors.push(`Chunk extraction error: ${(err as Error).message}`);
       }
       // Store the chunk with an embedding regardless of extraction outcome —
       // vector search should see the text even when entity extraction is sparse.
       try {
         const vector = await embed(chunk);
         insertChunk(vertical, `${documentId}::${i}`, documentId, i, chunk, vector, backend, { title, source });
-      } catch (err: any) {
-        result.errors.push(`Chunk embed error: ${err.message}`);
+      } catch (err) {
+        result.errors.push(`Chunk embed error: ${(err as Error).message}`);
       }
     }
 
@@ -307,8 +307,8 @@ export async function runExtractionPipeline(
     // Store document record
     insertDocument(vertical, documentId, source, title, "extracted", chunks.length, entityIds);
 
-  } catch (err: any) {
-    result.errors.push(`Pipeline error: ${err.message}`);
+  } catch (err) {
+    result.errors.push(`Pipeline error: ${(err as Error).message}`);
   }
 
   return result;

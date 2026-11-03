@@ -4,10 +4,14 @@ import { usePathname } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { Database, GitBranch, Search, Activity, Settings2, Shield, Zap, Menu, X, Bell, Settings, ChevronDown, CreditCard, LogOut, Users, Rocket, Wrench } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { enterprise } from "@/data/enterprise";
+import { verticals, type Vertical, type VerticalIcon } from "@/data/verticals";
+import type { SourceEvent, SourcesResponse } from "@/lib/coa-source-shape";
+import { useFidelity, type Fidelity } from "@/lib/use-fidelity";
 import { AwsLogo } from "@/components/aws-logo";
 import { FidelityBadge } from "@/components/fidelity-badge";
+import { formatUtc } from "@/components/vertical-sources";
 
 const navItems = [
   { href: "/console/sources", label: "Sources", icon: Database },
@@ -21,6 +25,23 @@ const navItems = [
   { href: "/portal", label: "Customer Portal", icon: Users },
 ];
 
+const verticalIds = Object.keys(verticals) as Vertical[];
+const toggleIcons: Record<VerticalIcon, typeof Shield> = { shield: Shield, zap: Zap, wrench: Wrench };
+// Literal class strings per vertical colour (Tailwind only generates classes it can see).
+const toggleActive: Record<string, string> = {
+  red: "bg-gradient-to-r from-red-950/80 to-red-900/50 text-red-300 border border-red-700/50",
+  green: "bg-gradient-to-r from-emerald-950/80 to-emerald-900/50 text-emerald-300 border border-emerald-700/50",
+  indigo: "bg-gradient-to-r from-indigo-950/80 to-indigo-900/50 text-indigo-300 border border-indigo-700/50",
+  amber: "bg-gradient-to-r from-amber-950/80 to-amber-900/50 text-amber-300 border border-amber-700/50",
+};
+const glowClass: Record<string, string> = { red: "bg-red-500", green: "bg-emerald-500", indigo: "bg-indigo-500", amber: "bg-amber-500" };
+const stackLine: Record<Fidelity, string> = {
+  mock: "Local SQLite seed · no AWS",
+  ontology: "Local OWL reasoner · no AWS",
+  coa: "COA · Neptune · OpenSearch · Bedrock",
+};
+const NOTIFICATION_LIMIT = 3;
+
 export function ConsoleLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { vertical, setVertical } = useAppStore();
@@ -28,13 +49,34 @@ export function ConsoleLayout({ children }: { children: React.ReactNode }) {
   const [showNotifs, setShowNotifs] = useState(false);
   const [showWorkspace, setShowWorkspace] = useState(false);
   const [showUser, setShowUser] = useState(false);
+  const fidelity = useFidelity();
+  // Real source events only (live COA lifecycle or seed ingestion), tagged
+  // with the vertical they were fetched for so a switch never shows stale ones.
+  const [notifs, setNotifs] = useState<{ vertical: Vertical; events: SourceEvent[] } | null>(null);
 
-  const unread = enterprise.notifications.filter((n) => !n.read).length;
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/sources?vertical=${encodeURIComponent(vertical)}`)
+      .then((r) => r.json())
+      .then((body: Partial<SourcesResponse>) => {
+        const events = [...(body.events ?? [])].sort((a, b) => b.at.localeCompare(a.at)).slice(0, NOTIFICATION_LIMIT);
+        if (!cancelled) setNotifs({ vertical, events });
+      })
+      .catch(() => {
+        if (!cancelled) setNotifs({ vertical, events: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [vertical]);
+
+  const events = notifs?.vertical === vertical ? notifs.events : [];
+  const config = verticals[vertical];
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-zinc-100">
       <div className="fixed inset-0 pointer-events-none">
-        <div className={cn("absolute top-0 left-1/2 -translate-x-1/2 w-[600px] md:w-[800px] h-[300px] md:h-[400px] rounded-full blur-[120px] opacity-[0.05] transition-colors duration-1000", vertical === "cyber" ? "bg-red-500" : vertical === "energy" ? "bg-emerald-500" : "bg-indigo-500")} />
+        <div className={cn("absolute top-0 left-1/2 -translate-x-1/2 w-[600px] md:w-[800px] h-[300px] md:h-[400px] rounded-full blur-[120px] opacity-[0.05] transition-colors duration-1000", glowClass[config.color] ?? "bg-indigo-500")} />
       </div>
 
       <header className="relative border-b border-white/[0.06] bg-white/[0.02] backdrop-blur-xl px-4 md:px-5 py-2.5 flex items-center justify-between z-30">
@@ -51,7 +93,7 @@ export function ConsoleLayout({ children }: { children: React.ReactNode }) {
           {/* Workspace selector */}
           <div className="hidden md:block relative ml-3">
             <button onClick={() => setShowWorkspace(!showWorkspace)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04] text-xs text-zinc-300 transition-colors">
-              {enterprise.workspaces[0].name} <ChevronDown className="w-3 h-3 text-zinc-500" />
+              {config.workspaceName} <ChevronDown className="w-3 h-3 text-zinc-500" />
             </button>
             {showWorkspace && (
               <div className="absolute top-full left-0 mt-1 w-56 rounded-xl border border-white/[0.08] bg-[#111118] shadow-2xl z-50 py-1">
@@ -68,37 +110,34 @@ export function ConsoleLayout({ children }: { children: React.ReactNode }) {
 
         <div className="flex items-center gap-1.5 md:gap-2">
           {/* Vertical toggle */}
-          <button onClick={() => setVertical("cyber")} className={cn("flex items-center gap-1 px-2 md:px-3 py-1.5 rounded-lg text-xs font-medium transition-all", vertical === "cyber" ? "bg-gradient-to-r from-red-950/80 to-red-900/50 text-red-300 border border-red-700/50" : "text-zinc-500 hover:text-zinc-300")}>
-            <Shield className="w-3 h-3" /> <span className="hidden sm:inline">Cyber</span>
-          </button>
-          <button onClick={() => setVertical("energy")} className={cn("flex items-center gap-1 px-2 md:px-3 py-1.5 rounded-lg text-xs font-medium transition-all", vertical === "energy" ? "bg-gradient-to-r from-emerald-950/80 to-emerald-900/50 text-emerald-300 border border-emerald-700/50" : "text-zinc-500 hover:text-zinc-300")}>
-            <Zap className="w-3 h-3" /> <span className="hidden sm:inline">Energy</span>
-          </button>
-          <button onClick={() => setVertical("otsec")} className={cn("flex items-center gap-1 px-2 md:px-3 py-1.5 rounded-lg text-xs font-medium transition-all", vertical === "otsec" ? "bg-gradient-to-r from-indigo-950/80 to-indigo-900/50 text-indigo-300 border border-indigo-700/50" : "text-zinc-500 hover:text-zinc-300")}>
-            <Shield className="w-3 h-3" /> <span className="hidden sm:inline">OT Sec</span>
-          </button>
-          <button onClick={() => setVertical("prodquality")} className={cn("flex items-center gap-1 px-2 md:px-3 py-1.5 rounded-lg text-xs font-medium transition-all", vertical === "prodquality" ? "bg-gradient-to-r from-amber-950/80 to-amber-900/50 text-amber-300 border border-amber-700/50" : "text-zinc-500 hover:text-zinc-300")}>
-            <Wrench className="w-3 h-3" /> <span className="hidden sm:inline">Product Quality</span>
-          </button>
+          {verticalIds.map((id) => {
+            const v = verticals[id];
+            const Icon = toggleIcons[v.icon];
+            return (
+              <button key={id} onClick={() => setVertical(id)} className={cn("flex items-center gap-1 px-2 md:px-3 py-1.5 rounded-lg text-xs font-medium transition-all", vertical === id ? toggleActive[v.color] : "text-zinc-500 hover:text-zinc-300")}>
+                <Icon className="w-3 h-3" /> <span className="hidden sm:inline">{v.toggleLabel}</span>
+              </button>
+            );
+          })}
           <div className="w-px h-5 bg-white/[0.06] mx-1 hidden md:block" />
 
           {/* Notifications */}
           <div className="relative">
             <button onClick={() => setShowNotifs(!showNotifs)} className="relative p-2 rounded-lg hover:bg-white/[0.06] text-zinc-400 transition-colors">
               <Bell className="w-4 h-4" />
-              {unread > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-indigo-500 rounded-full" />}
+              {events.length > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-indigo-500 rounded-full" />}
             </button>
             {showNotifs && (
               <div className="absolute top-full right-0 mt-1 w-72 rounded-xl border border-white/[0.08] bg-[#111118] shadow-2xl z-50">
                 <div className="px-3 py-2 border-b border-white/[0.06] flex justify-between items-center">
                   <p className="text-xs font-medium text-zinc-300">Notifications</p>
-                  <span className="text-[10px] text-indigo-400">{unread} new</span>
+                  <span className="text-[10px] text-zinc-500">{config.workspaceName}</span>
                 </div>
-                {enterprise.notifications.map((n) => (
-                  <div key={n.id} className={cn("px-3 py-2.5 border-b border-white/[0.04] last:border-0", !n.read && "bg-indigo-950/10")}>
+                {events.length === 0 && <div className="px-3 py-3 text-xs text-zinc-500">No recent source events</div>}
+                {events.map((n) => (
+                  <div key={`${n.kind}-${n.at}-${n.title}`} className="px-3 py-2.5 border-b border-white/[0.04] last:border-0">
                     <div className="text-xs font-medium text-zinc-200">{n.title}</div>
-                    <div className="text-[11px] text-zinc-500 mt-0.5">{n.desc}</div>
-                    <div className="text-[10px] text-zinc-600 mt-1">{n.time}</div>
+                    <div className="text-[10px] text-zinc-600 mt-1">{formatUtc(n.at)}</div>
                   </div>
                 ))}
               </div>
@@ -139,10 +178,7 @@ export function ConsoleLayout({ children }: { children: React.ReactNode }) {
             <div className="px-3 py-2 rounded-lg bg-[#232f3e] flex items-center justify-center">
               <AwsLogo className="h-4" />
             </div>
-            <div className="px-3 mt-2 space-y-0.5 text-[10px] text-zinc-600">
-              <div>Bedrock • Neptune • OpenSearch</div>
-              <div>S3 • CloudFront • Lambda</div>
-            </div>
+            {fidelity && <div className="px-3 mt-2 text-[10px] text-zinc-600">{stackLine[fidelity]}</div>}
           </div>
         </nav>
 

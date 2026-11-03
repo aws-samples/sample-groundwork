@@ -92,8 +92,8 @@ export async function syncCisaKev(vertical: string): Promise<CisaKevSyncResult> 
       `CISA KEV Sync: ${result.total_kevs} total, ${result.matched_existing} enriched, ${result.new_nodes_created} new`,
       "advisory", result.matched_existing + result.new_nodes_created, []);
 
-  } catch (err: any) {
-    result.errors.push(`CISA KEV sync error: ${err.message}`);
+  } catch (err) {
+    result.errors.push(`CISA KEV sync error: ${(err as Error).message}`);
   }
 
   return result;

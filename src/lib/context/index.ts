@@ -84,6 +84,14 @@ function buildProvider(mode: ContextMode): ContextProvider {
 export function getProvider(): ContextProvider {
   return buildProvider(getMode());
 }
+/**
+ * The local demo seed (SQLite), regardless of the active mode. Used where the
+ * UI explicitly shows the seed, e.g. the Graph page in Live COA, whose own
+ * graph is virtual and cannot be drawn.
+ */
+export function getSeedProvider(): ContextProvider {
+  return buildProvider("mock");
+}
 
 /** Test/hot-reload helper — clears cached providers and any runtime override. */
 export function resetProvider() {

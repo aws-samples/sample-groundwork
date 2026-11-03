@@ -8,7 +8,7 @@
  * See docs/RUNNING.md for the contract this file formalizes.
  */
 
-export type Vertical = "otsec" | "energy" | "cyber";
+export type Vertical = "cyber" | "energy" | "otsec" | "prodquality";
 export type QueryMode = "vector" | "graph";
 export type Fidelity = "mock" | "ontology" | "coa";
 
@@ -68,6 +68,18 @@ export interface QueryResult {
   /** Natural-language answer (synthesized in ontology/coa modes). */
   answer?: string;
   sources?: number;
+  /**
+   * Unit label for `sources` (e.g. "rows" for a live SQL-backed answer). When
+   * set, the UI shows `sources` + this label instead of counting citations as
+   * "docs". Unset = today's behaviour.
+   */
+  sourcesUnit?: string;
+  /**
+   * One sentence describing how the graph answer was resolved (which live
+   * tables / ontology relations it walked). Replaces the UI's generic
+   * "walked the knowledge graph…" line when present.
+   */
+  pathDescription?: string;
   latency: number;
   hops?: number;
   model?: string;

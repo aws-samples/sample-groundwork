@@ -11,20 +11,23 @@
 #     [NARR] = NARRATIVE.md demo runbook
 #
 # USAGE
-#   1. Start the app in the mode you want to test, in another terminal:
+#   1. Start the app in the mode you want to test, in another terminal. The
+#      server binds 127.0.0.1; the API needs AUTH_LOCAL_BYPASS=true (local only)
+#      or the DEMO_USER/DEMO_PASS/AUTH_SECRET gate, else it answers 503:
+#        export AUTH_LOCAL_BYPASS=true
 #        CONTEXT_MODE=mock      npm run dev      # Mode 1
 #        CONTEXT_MODE=ontology  npm run dev      # Mode 2
 #        CONTEXT_MODE=coa       npm run dev      # Mode 3 (needs .env.local COA_*)
 #   2. Then run:
 #        ./scripts/test-modes.sh                 # auto-detects the running mode
-#        ./scripts/test-modes.sh --url http://localhost:3000 --vertical otsec
+#        ./scripts/test-modes.sh --url http://127.0.0.1:3000 --vertical otsec
 #
 # The script never changes the server's mode — it tests whatever is running and
 # tailors its expectations to that mode's fidelity.
 # =============================================================================
 set -uo pipefail
 
-URL="http://localhost:3000"
+URL="http://127.0.0.1:3000"
 VERTICAL="otsec"
 while [ $# -gt 0 ]; do
   case "$1" in

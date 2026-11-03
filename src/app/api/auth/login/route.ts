@@ -1,15 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkCredentials, issueSession, isGateEnabled, AUTH_COOKIE } from "@/lib/auth";
+import { checkCredentials, issueSession, gateState, AUTH_COOKIE } from "@/lib/auth";
 
 /**
  * POST /api/auth/login { email, password }
  *
- * Validates against the demo gate credentials (DEMO_USER / DEMO_PASS) and, on
- * success, sets a signed httpOnly session cookie that middleware checks on every
- * protected route. When the gate is disabled (local dev, no DEMO_USER), any
- * non-empty credentials succeed so the local experience stays frictionless.
+ * Validates against the login gate credentials (DEMO_USER / DEMO_PASS) and, on
+ * success, sets a signed httpOnly session cookie that the proxy checks on every
+ * protected route. A session is issued ONLY when the gate is configured; no
+ * login is ever accepted otherwise (fail closed):
+ *   - bypass (AUTH_LOCAL_BYPASS=true): 409, no session is needed.
+ *   - unconfigured: 503 (the proxy normally answers this state first).
  */
 export async function POST(request: NextRequest) {
+  const state = gateState();
+  if (state === "bypass") {
+    return NextResponse.json(
+      { error: "Login is disabled in local bypass mode; no session is needed." },
+      { status: 409 }
+    );
+  }
+  if (state === "unconfigured") {
+    return NextResponse.json({ error: "Login gate is not configured." }, { status: 503 });
+  }
+
   let body: { email?: string; password?: string };
   try {
     body = await request.json();
@@ -19,14 +32,11 @@ export async function POST(request: NextRequest) {
 
   const email = (body.email ?? "").trim();
   const password = body.password ?? "";
-
   if (!email || !password) {
     return NextResponse.json({ error: "Enter your credentials" }, { status: 400 });
   }
 
-  // Local dev (gate disabled): accept any non-empty creds. Hosted: must match.
-  const ok = isGateEnabled() ? checkCredentials(email, password) : true;
-  if (!ok) {
+  if (!checkCredentials(email, password)) {
     return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
   }
 

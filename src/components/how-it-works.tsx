@@ -10,6 +10,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { verticals, type Vertical } from "@/data/verticals";
 import {
   ChevronDown,
   FileText,
@@ -50,51 +51,57 @@ interface ModeCopy {
   grounding: string;
 }
 
-const MODE_COPY: Record<string, ModeCopy> = {
-  mock: {
-    name: "Mode 1 · Demo data",
-    tagline: "Curated seed graph in local SQLite — boots in seconds, no AWS.",
-    stored: [
-      { label: "Graph", kind: "graph", status: "active", detail: "Curated nodes + edges (threat actors, techniques, CVEs, OT assets, zones) in SQLite", tip: "USED: GraphRAG walks these curated SQLite edges (BFS up to 4 hops) to build the connected-facts answer." },
-      { label: "Documents", kind: "vector", status: "simulated", detail: "Seed report metadata; vector chunks simulated", tip: "SIMULATED: demo mode fakes the vector/OpenSearch step so it runs with no AWS. Returns a canned similar-chunks response." },
-    ],
-    vector: "Returns a few similar text chunks (simulated OpenSearch) — shallow, single-source.",
-    graph: "Walks the seed graph from the entities in your question (BFS, up to 4 hops) to find *connected* facts.",
-    grounding: "Every fact comes from the seed graph — the model only rewords what the traversal returned.",
-  },
-  ontology: {
-    name: "Mode 2 · Local Ontology",
-    tagline: "Real OWL reasoning + real local vector retrieval — still no AWS.",
-    stored: [
-      { label: "Graph", kind: "graph", status: "active", detail: "Same SQLite graph, now typed by the ot-security OWL ontology (classes, relations, governed metrics)", tip: "USED: GraphRAG reasons over the OWL-typed graph — actor → technique → vulnerability → asset — no AWS needed." },
-      { label: "Vectors", kind: "vector", status: "empty", detail: "Real local embeddings (256-dim hashing) with cosine kNN — empty until you ingest documents", tip: "REAL BUT EMPTY: Vector RAG runs real cosine kNN, but there are no chunks until you ingest documents — so it returns nothing here." },
-    ],
-    vector: "Real cosine kNN over locally-embedded chunks. Honestly returns nothing until documents are ingested.",
-    graph: "Ontology-typed traversal: reasons actor → technique → vulnerability → asset across the graph.",
-    grounding: "Answer is synthesized only from ontology-typed graph facts; the model articulates, it doesn't invent.",
-  },
-  coa: {
-    name: "Mode 3 · Live COA",
-    tagline: "Real Context Ontology Accelerator in your AWS account — Neptune + OpenSearch.",
-    stored: [
-      { label: "Graph", kind: "graph", status: "active", detail: "Amazon Neptune — entities + relationships extracted from ingested docs (MITRE ATT&CK ICS, NVD CVEs)", tip: "USED: GraphRAG runs COA's tiered resolution (governed metric → SPARQL) over the real Neptune graph in your AWS account." },
-      { label: "Vectors", kind: "vector", status: "active", detail: "Amazon OpenSearch Serverless — Bedrock embeddings of document chunks", tip: "USED: Bedrock embeds your question, then OpenSearch Serverless returns the most similar real document chunks." },
-    ],
-    vector: "Bedrock embeds your question → OpenSearch kNN returns the most similar document chunks.",
-    graph: "COA tiered resolution: governed metric → SPARQL over the Neptune graph → agentic synthesis.",
-    grounding: "Grounded strictly in retrieved graph + chunks from your account. If it's not in the data, it says so.",
-  },
-};
+/** Mode copy for one vertical; store details come from the vertical's entity types. */
+function modeCopy(vertical: Vertical): Record<string, ModeCopy> {
+  const types = verticals[vertical].entityTypes.slice(0, 5).join(", ");
+  return {
+    mock: {
+      name: "Mode 1 · Demo data",
+      tagline: "Curated seed graph in local SQLite — boots in seconds, no AWS.",
+      stored: [
+        { label: "Graph", kind: "graph", status: "active", detail: `Curated nodes + edges (${types}) in SQLite`, tip: "USED: GraphRAG walks these curated SQLite edges (BFS up to 4 hops) to build the connected-facts answer." },
+        { label: "Documents", kind: "vector", status: "simulated", detail: "Seed documents metadata; vector chunks simulated", tip: "SIMULATED: demo mode fakes the vector/OpenSearch step so it runs with no AWS. Returns a canned similar-chunks response." },
+      ],
+      vector: "Returns a few similar text chunks (simulated OpenSearch) — shallow, single-source.",
+      graph: "Walks the seed graph from the entities in your question (BFS, up to 4 hops) to find *connected* facts.",
+      grounding: "Every fact comes from the seed graph — the model only rewords what the traversal returned.",
+    },
+    ontology: {
+      name: "Mode 2 · Local Ontology",
+      tagline: "Real OWL reasoning + real local vector retrieval — still no AWS.",
+      stored: [
+        { label: "Graph", kind: "graph", status: "active", detail: `Same SQLite graph (${types}), now typed by the vertical's pack OWL ontology (classes, relations, governed metrics)`, tip: "USED: GraphRAG reasons over the OWL-typed graph using the pack's typed relationships — no AWS needed." },
+        { label: "Vectors", kind: "vector", status: "empty", detail: "Real local embeddings (256-dim hashing) with cosine kNN — empty until you ingest documents", tip: "REAL BUT EMPTY: Vector RAG runs real cosine kNN, but there are no chunks until you ingest documents — so it returns nothing here." },
+      ],
+      vector: "Real cosine kNN over locally-embedded chunks. Honestly returns nothing until documents are ingested.",
+      graph: "Ontology-typed traversal: follows the pack's typed relationships across the graph.",
+      grounding: "Answer is synthesized only from ontology-typed graph facts; the model articulates, it doesn't invent.",
+    },
+    coa: {
+      name: "Mode 3 · Live COA",
+      tagline: "Real Context Ontology Accelerator in your AWS account — Neptune + OpenSearch.",
+      stored: [
+        { label: "Graph", kind: "graph", status: "active", detail: "Amazon Neptune — entities and relationships mapped over this vertical's registered COA sources", tip: "USED: GraphRAG runs COA's tiered resolution (governed metric → SPARQL) over the real Neptune graph in your AWS account." },
+        { label: "Vectors", kind: "vector", status: "active", detail: "Amazon OpenSearch Serverless — Bedrock embeddings of documents ingested into the namespace's DOCUMENTS sources", tip: "USED: Bedrock embeds your question, then OpenSearch Serverless returns the most similar real document chunks." },
+      ],
+      vector: "Bedrock embeds your question → OpenSearch kNN returns the most similar document chunks.",
+      graph: "COA tiered resolution: governed metric → SPARQL over the Neptune graph → agentic synthesis.",
+      grounding: "Grounded strictly in retrieved graph + chunks from your account. If it's not in the data, it says so.",
+    },
+  };
+}
 
 // Phases: 0 question · 1 flow→retrieve · 2 retrieve · 3 flow→synthesize ·
 //         4 synthesize · 5 DONE (everything settled with checks)
 const DONE = 5;
 
 export function HowItWorks({
+  vertical,
   fidelity,
   vectorUsed = null,
   graphUsed = null,
 }: {
+  vertical: Vertical;
   fidelity: Fidelity;
   /** After a real query: did the Vector path contribute? null = not run yet. */
   vectorUsed?: boolean | null;
@@ -102,7 +109,9 @@ export function HowItWorks({
   graphUsed?: boolean | null;
 }) {
   const [open, setOpen] = useState(false);
-  const copy = MODE_COPY[fidelity] ?? MODE_COPY.mock;
+  const allCopy = modeCopy(vertical);
+  const copy = allCopy[fidelity] ?? allCopy.mock;
+  const example = verticals[vertical].queries[0]?.question;
 
   // Did ANY path contribute? null = no query yet (neutral flow), true = grounded,
   // false = neither path returned data (flow shows honest "no grounding").
@@ -254,7 +263,7 @@ export function HowItWorks({
               <ModeCompareCard active={fidelity === "coa"} title="Mode 3 · Live COA" backend="Neptune + OpenSearch (your AWS)" note="Real Context Ontology Accelerator over real ingested data. This is production fidelity." accent />
             </div>
             <p className="text-[10px] text-zinc-600 mt-1.5 leading-snug">
-              Same question, same UI — only the <span className="text-zinc-400">fidelity of the data and backends</span> changes. That&apos;s why Mode 1/2 answer the VOLTZITE seed story, while Mode 3 answers from the real MITRE/NVD corpus in your account.
+              Same question, same UI — only the <span className="text-zinc-400">fidelity of the data and backends</span> changes. That&apos;s why Mode 1/2 answer from the local seed story{example ? <> (for example &ldquo;{example}&rdquo;)</> : null}, while Mode 3 answers from the sources registered in your COA namespace.
             </p>
           </div>
 

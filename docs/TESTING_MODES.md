@@ -121,7 +121,7 @@ first (Cognito tokens last ~1h):
 # refresh COA_TOKEN in .env.local
 aws cognito-idp initiate-auth --auth-flow USER_PASSWORD_AUTH \
   --client-id <YOUR_COGNITO_CLIENT_ID> \
-  --auth-parameters USERNAME=<you>@amazon.com,PASSWORD='<pw>' \
+  --auth-parameters USERNAME=you@example.com,PASSWORD='<pw>' \
   --query AuthenticationResult.IdToken --output text
 # paste into COA_TOKEN= in .env.local, then:
 CONTEXT_MODE=coa npm run dev
